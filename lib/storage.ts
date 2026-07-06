@@ -6,15 +6,18 @@ import { createClient } from "@/lib/supabase/server";
 
 const BUCKET = "documents";
 
-// Short-lived signed URL for downloading a private object.
+// Short-lived signed URL for a private object. When `download` is true the
+// browser saves the file; when false it serves inline (Content-Disposition
+// inline) so it can be previewed in an <iframe>.
 export async function createSignedDownloadUrl(
   path: string,
   expiresIn = 60,
+  download = true,
 ): Promise<{ url: string | null; error: string | null }> {
   const supabase = await createClient();
   const { data, error } = await supabase.storage
     .from(BUCKET)
-    .createSignedUrl(path, expiresIn, { download: true });
+    .createSignedUrl(path, expiresIn, download ? { download: true } : {});
   if (error) return { url: null, error: error.message };
   return { url: data.signedUrl, error: null };
 }

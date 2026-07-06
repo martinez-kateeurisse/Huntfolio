@@ -159,6 +159,37 @@ export async function getDocumentDownloadUrl(
   return { ok: true, data: { url } };
 }
 
+export async function getDocumentPreviewUrl(
+  id: string,
+): Promise<ActionResult<{ url: string }>> {
+  if (IS_DEMO) {
+    return {
+      ok: false,
+      error: "Previews need a connected Supabase project (demo has no files).",
+    };
+  }
+
+  const { supabase } = await requireUser();
+  const { data: doc, error } = await supabase
+    .from("documents")
+    .select("file_url")
+    .eq("id", id)
+    .single();
+  if (error) return { ok: false, error: error.message };
+  if (!doc.file_url) return { ok: false, error: "No file on record." };
+
+  // Inline (download=false) and a slightly longer TTL so the viewer stays open.
+  const { url, error: urlErr } = await createSignedDownloadUrl(
+    doc.file_url,
+    120,
+    false,
+  );
+  if (urlErr || !url) {
+    return { ok: false, error: urlErr ?? "Couldn't create a preview link." };
+  }
+  return { ok: true, data: { url } };
+}
+
 export async function attachDocument(
   applicationId: string,
   documentId: string,

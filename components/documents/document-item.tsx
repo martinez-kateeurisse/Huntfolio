@@ -1,8 +1,9 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
   Download,
+  Eye,
   FileText,
   MoreHorizontal,
   Star,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/actions/documents";
 import type { Document } from "@/lib/database.types";
 import { Button } from "@/components/ui/button";
+import { DocumentPreviewDialog } from "@/components/documents/document-preview";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +35,7 @@ export function DocumentItem({
   onRequestDelete: (doc: Document) => void;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   function download() {
     startTransition(async () => {
@@ -55,12 +58,23 @@ export function DocumentItem({
 
   return (
     <div className="flex items-center gap-3 rounded-lg border bg-card p-3">
-      <div className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
+      <button
+        type="button"
+        onClick={() => setPreviewOpen(true)}
+        title="Preview"
+        className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground transition-colors hover:bg-muted-foreground/15 hover:text-foreground"
+      >
         <FileText className="size-4" />
-      </div>
-      <div className="min-w-0 flex-1">
+      </button>
+      <button
+        type="button"
+        onClick={() => setPreviewOpen(true)}
+        className="min-w-0 flex-1 text-left"
+      >
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="truncate text-sm font-medium">{doc.name}</span>
+          <span className="truncate text-sm font-medium hover:underline">
+            {doc.name}
+          </span>
           {doc.is_default && (
             <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium leading-none text-amber-700 dark:bg-amber-950 dark:text-amber-300">
               <Star className="size-2.5 fill-current" /> Default
@@ -71,7 +85,17 @@ export function DocumentItem({
           {doc.version_label ? `${doc.version_label} · ` : ""}
           {formatDate(doc.created_at)}
         </p>
-      </div>
+      </button>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setPreviewOpen(true)}
+        aria-label="Preview"
+        className="shrink-0"
+      >
+        <Eye className="size-4" />
+      </Button>
 
       <Button
         variant="ghost"
@@ -96,6 +120,9 @@ export function DocumentItem({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => setPreviewOpen(true)}>
+            <Eye className="mr-2 size-4" /> Preview
+          </DropdownMenuItem>
           {!doc.is_default && (
             <DropdownMenuItem onClick={makeDefault}>
               <Star className="mr-2 size-4" /> Set as default
@@ -113,6 +140,12 @@ export function DocumentItem({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <DocumentPreviewDialog
+        doc={doc}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+      />
     </div>
   );
 }

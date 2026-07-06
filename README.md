@@ -1,4 +1,4 @@
-# Huntfolio
+P# Huntfolio
 
 A personal job-search tracker. Organize applications, move them through a
 pipeline, track follow-ups and interviews, and see your momentum at a glance.
