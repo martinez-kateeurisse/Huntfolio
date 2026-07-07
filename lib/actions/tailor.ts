@@ -1,6 +1,5 @@
 "use server";
 
-import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { extractResumeText } from "@/lib/text-extract";
 import {
@@ -79,11 +78,11 @@ export async function tailorResume(
   if (!input.jobDescription?.trim()) {
     return { ok: false, error: "Paste or provide the job description first." };
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.OPENROUTER_API_KEY) {
     return {
       ok: false,
       error:
-        "AI tailoring isn't configured — set ANTHROPIC_API_KEY in your environment.",
+        "AI tailoring isn't configured — set OPENROUTER_API_KEY in your environment.",
     };
   }
 
@@ -101,54 +100,113 @@ export async function tailorResume(
     };
   }
 
-  // 2. Ask Claude for structured tailoring guidance (server-side only).
-  const model = process.env.ANTHROPIC_MODEL || "claude-opus-4-8";
-  const client = new Anthropic();
+  // 2. Ask the model (via OpenRouter, OpenAI-compatible) for structured
+  // tailoring guidance. Server-side only — the key never reaches the client.
+  const model = process.env.OPENROUTER_MODEL || "openrouter/free";
 
   let parsed: RawTailor;
   try {
-    const response = await client.messages.create({
-      model,
-      max_tokens: 16000,
-      thinking: { type: "adaptive" },
-      output_config: {
-        effort: "medium",
-        format: { type: "json_schema", schema: TAILOR_JSON_SCHEMA },
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "X-Title": "Huntfolio",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 8000,
+          temperature: 0.3,
+          messages: [
+            {
+              role: "system",
+              content:
+                TAILOR_SYSTEM_PROMPT +
+                "\n\nRespond with ONLY a single JSON object matching the requested fields. No prose, no markdown code fences.",
+            },
+            {
+              role: "user",
+              content: buildTailorUserMessage(input.jobDescription, resumeText),
+            },
+          ],
+          // Ask for schema-enforced JSON; free models that ignore it are caught
+          // by the defensive parse below.
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "tailor_guidance",
+              strict: true,
+              schema: TAILOR_JSON_SCHEMA,
+            },
+          },
+        }),
       },
-      system: TAILOR_SYSTEM_PROMPT,
-      messages: [
-        { role: "user", content: buildTailorUserMessage(input.jobDescription, resumeText) },
-      ],
-    });
+    );
 
-    if (response.stop_reason === "refusal") {
-      return { ok: false, error: "The model declined this request." };
+    if (!response.ok) {
+      const detail = await safeErrorMessage(response);
+      if (response.status === 401) {
+        return { ok: false, error: "Invalid OPENROUTER_API_KEY." };
+      }
+      if (response.status === 402) {
+        return {
+          ok: false,
+          error: "OpenRouter quota exhausted for this model — try a free model.",
+        };
+      }
+      if (response.status === 429) {
+        return { ok: false, error: "Rate limited — try again in a moment." };
+      }
+      return {
+        ok: false,
+        error: `Tailoring failed (${response.status}): ${detail}`,
+      };
     }
 
-    const jsonText = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("");
-    parsed = JSON.parse(jsonText) as RawTailor;
+    const data = (await response.json()) as {
+      choices?: { message?: { content?: string } }[];
+    };
+    const content = data.choices?.[0]?.message?.content;
+    if (typeof content !== "string" || !content.trim()) {
+      return {
+        ok: false,
+        error:
+          "The model returned an empty response. Try again or set a different OPENROUTER_MODEL.",
+      };
+    }
+
+    const json = extractJson(content);
+    if (!json) {
+      return {
+        ok: false,
+        error:
+          "Couldn't read the model's response as JSON. Try again, or set OPENROUTER_MODEL to one that supports structured output.",
+      };
+    }
+    parsed = json as RawTailor;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    if (err instanceof Anthropic.RateLimitError) {
-      return { ok: false, error: "Rate limited — try again in a moment." };
-    }
-    if (err instanceof Anthropic.AuthenticationError) {
-      return { ok: false, error: "Invalid ANTHROPIC_API_KEY." };
-    }
     return { ok: false, error: `Tailoring failed: ${message}` };
   }
 
   const result: TailorResult = {
-    matchSummary: parsed.match_summary,
+    matchSummary: parsed.match_summary ?? "",
     keyStrengths: parsed.key_strengths ?? [],
     keywordGaps: parsed.keyword_gaps ?? [],
     emphasisSuggestions: parsed.emphasis_suggestions ?? [],
-    tailoredSummary: parsed.tailored_summary,
+    tailoredSummary: parsed.tailored_summary ?? "",
     bulletRewrites: parsed.bullet_rewrites ?? [],
   };
+
+  if (!result.matchSummary && !result.tailoredSummary) {
+    return {
+      ok: false,
+      error:
+        "The model didn't return usable tailoring guidance. Try again or set a different OPENROUTER_MODEL.",
+    };
+  }
 
   // 3. Save into prep_notes as a research note linked to the application.
   const saved = await createPrepNote({
@@ -168,13 +226,45 @@ export async function tailorResume(
 }
 
 type RawTailor = {
-  match_summary: string;
-  key_strengths: string[];
-  keyword_gaps: string[];
-  emphasis_suggestions: string[];
-  tailored_summary: string;
-  bullet_rewrites: { original: string; rewrite: string }[];
+  match_summary?: string;
+  key_strengths?: string[];
+  keyword_gaps?: string[];
+  emphasis_suggestions?: string[];
+  tailored_summary?: string;
+  bullet_rewrites?: { original: string; rewrite: string }[];
 };
+
+// Pull a JSON object out of a model response, tolerating markdown fences or
+// leading/trailing prose from free models that don't honor response_format.
+function extractJson(text: string): unknown | null {
+  const cleaned = text.replace(/```(?:json)?/gi, "").trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start !== -1 && end > start) {
+      try {
+        return JSON.parse(cleaned.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+async function safeErrorMessage(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as {
+      error?: { message?: string };
+      message?: string;
+    };
+    return body.error?.message ?? body.message ?? res.statusText;
+  } catch {
+    return res.statusText;
+  }
+}
 
 async function resumeTextFromDocument(
   documentId: string,

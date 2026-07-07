@@ -44,7 +44,7 @@ enough to deploy publicly.
 | Drag & drop | dnd-kit                                       |
 | Forms       | react-hook-form + zod                         |
 | Charts      | Recharts                                      |
-| AI          | Anthropic (Claude), server-side               |
+| AI          | OpenRouter (free models), server-side         |
 | Deploy      | Vercel                                        |
 
 ## Getting started
@@ -85,7 +85,7 @@ Open [http://localhost:3000](http://localhost:3000) and sign in with the
 magic link sent to your email.
 
 > **Optional:** run `supabase/seed.sql` (after signing in once) to load sample
-> data, and add `ANTHROPIC_API_KEY` to `.env.local` to enable AI resume
+> data, and add `OPENROUTER_API_KEY` to `.env.local` to enable AI resume
 > tailoring. See `.env.example` for all variables.
 
 ## Deploying to Vercel
