@@ -1,9 +1,11 @@
 import "server-only";
-import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
 
 // Server-only: extract plain text from a resume file buffer. Supports .pdf and
 // .docx (the formats the document library accepts alongside .doc).
+//
+// pdf-parse (which bundles pdfjs-dist) and mammoth are imported dynamically so
+// they only load at runtime when a file is actually extracted — keeping them
+// out of route compilation, which otherwise crashes the Turbopack dev worker.
 
 export async function extractResumeText(
   buffer: Buffer,
@@ -13,6 +15,7 @@ export async function extractResumeText(
 
   try {
     if (ext === "pdf") {
+      const { PDFParse } = await import("pdf-parse");
       const parser = new PDFParse({ data: buffer });
       try {
         const data = await parser.getText();
@@ -22,6 +25,7 @@ export async function extractResumeText(
       }
     }
     if (ext === "docx") {
+      const { default: mammoth } = await import("mammoth");
       const { value } = await mammoth.extractRawText({ buffer });
       return { text: normalize(value), error: null };
     }
