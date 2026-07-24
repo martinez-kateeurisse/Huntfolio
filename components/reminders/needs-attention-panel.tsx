@@ -86,10 +86,12 @@ function NudgeRow({ nudge }: { nudge: Nudge }) {
   function addFollowUp() {
     if (!nudge.applicationId) return;
     startTransition(async () => {
-      const due = new Date(Date.now() + 2 * 86_400_000).toISOString();
+      // Two days out, all-day (local midnight) — no particular time implied.
+      const due = new Date(Date.now() + 2 * 86_400_000);
+      due.setHours(0, 0, 0, 0);
       const result = await createTask({
         title: nudge.title, // "Follow up with {company}"
-        due_date: due,
+        due_date: due.toISOString(),
         priority: "medium",
         application_id: nudge.applicationId!,
       });

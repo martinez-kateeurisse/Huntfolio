@@ -1,5 +1,5 @@
-import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { formatTime, hasDueTime } from "@/lib/format";
 import type { CalendarEvent } from "@/lib/queries";
 
 // Interviews and tasks get distinct colors so the month reads at a glance.
@@ -20,7 +20,9 @@ export function EventChip({
   className?: string;
   onClick?: () => void;
 }) {
-  const time = format(new Date(event.date), "h:mma").toLowerCase();
+  // Interviews always have a time; an all-day task has none to show.
+  const timed = event.kind === "interview" || hasDueTime(event.date);
+  const time = timed ? formatTime(event.date) : null;
   return (
     <button
       type="button"
@@ -33,7 +35,9 @@ export function EventChip({
         className,
       )}
     >
-      {showTime && <span className="shrink-0 tabular-nums opacity-70">{time}</span>}
+      {showTime && time && (
+        <span className="shrink-0 tabular-nums opacity-70">{time}</span>
+      )}
       <span className="truncate">{event.title}</span>
     </button>
   );

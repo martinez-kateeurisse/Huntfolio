@@ -43,6 +43,12 @@ const now = () => Date.now();
 const iso = (ms: number) => new Date(ms).toISOString();
 const daysAgo = (n: number) => iso(now() - n * 86_400_000);
 const daysFromNow = (n: number) => iso(now() + n * 86_400_000);
+// Task due dates are all-day unless a time is given (local midnight = all-day).
+const dueOn = (n: number, hh?: number, mm = 0) => {
+  const d = new Date(now() + n * 86_400_000);
+  d.setHours(hh ?? 0, hh === undefined ? 0 : mm, 0, 0);
+  return d.toISOString();
+};
 
 type DemoState = {
   applications: Application[];
@@ -247,13 +253,13 @@ function seed(): DemoState {
   });
 
   const tasks: Task[] = [
-    mkTask("demo-a4", "Finish UnionBank take-home", "SQL assessment — due end of week.", daysFromNow(2), "high"),
-    mkTask("demo-a6", "Prep for Kroll 2nd interview", "Review Playwright fixtures and CI setup.", daysFromNow(1), "high"),
-    mkTask("demo-a3", "Follow up with Sprout recruiter", "It's been a few days since applying.", daysAgo(1), "medium"),
-    mkTask("demo-a7", "Respond to Globe offer", "Ask about signing bonus and start date.", daysFromNow(0), "high"),
-    mkTask("demo-a2", "Complete an MLOps course module", "Two chapters before applying to TM.", daysFromNow(10), "medium"),
+    mkTask("demo-a4", "Finish UnionBank take-home", "SQL assessment — due end of week.", dueOn(2, 17, 0), "high"),
+    mkTask("demo-a6", "Prep for Kroll 2nd interview", "Review Playwright fixtures and CI setup.", dueOn(1, 9, 30), "high"),
+    mkTask("demo-a3", "Follow up with Sprout recruiter", "It's been a few days since applying.", dueOn(-1), "medium"),
+    mkTask("demo-a7", "Respond to Globe offer", "Ask about signing bonus and start date.", dueOn(0, 16, 0), "high"),
+    mkTask("demo-a2", "Complete an MLOps course module", "Two chapters before applying to TM.", dueOn(10), "medium"),
     mkTask(null, "Update resume with latest project", "Add the analytics dashboard work.", null, "medium"),
-    mkTask(null, "Refresh LinkedIn headline", null, daysAgo(3), "low", "done"),
+    mkTask(null, "Refresh LinkedIn headline", null, dueOn(-3), "low", "done"),
   ];
 
   const interviews: Interview[] = [

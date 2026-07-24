@@ -1,5 +1,6 @@
 import { differenceInCalendarDays } from "date-fns";
 import { getTasks, getApplications } from "@/lib/queries";
+import { hasDueTime } from "@/lib/format";
 import type { TaskWithApplication } from "@/lib/queries";
 import { QuickAddTask } from "@/components/tasks/quick-add-task";
 import { TaskItem } from "@/components/tasks/task-item";
@@ -19,8 +20,11 @@ const BUCKET_ORDER: { key: Bucket; label: string }[] = [
 
 function bucketOf(task: TaskWithApplication): Bucket {
   if (!task.due_date) return "none";
-  const diff = differenceInCalendarDays(new Date(task.due_date), new Date());
+  const due = new Date(task.due_date);
+  const diff = differenceInCalendarDays(due, new Date());
   if (diff < 0) return "overdue";
+  // A task due at a specific time drops into Overdue once that time passes.
+  if (hasDueTime(task.due_date) && due.getTime() < Date.now()) return "overdue";
   if (diff === 0) return "today";
   if (diff <= 7) return "week";
   return "later";

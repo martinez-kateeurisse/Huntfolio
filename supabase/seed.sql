@@ -127,27 +127,27 @@ values
   ((select id from auth.users order by created_at limit 1),
    '00000000-0000-0000-0000-0000000000a4',
    'Finish UnionBank take-home', 'SQL assessment — due end of week.',
-   now() + interval '2 days', 'todo', 'high'),
+   date_trunc('hour', now()) + interval '2 days', 'todo', 'high'),
 
   ((select id from auth.users order by created_at limit 1),
    '00000000-0000-0000-0000-0000000000a6',
    'Prep for Kroll 2nd interview', 'Review Playwright fixtures and CI setup.',
-   now() + interval '1 day', 'todo', 'high'),
+   date_trunc('hour', now()) + interval '1 day', 'todo', 'high'),
 
   ((select id from auth.users order by created_at limit 1),
    '00000000-0000-0000-0000-0000000000a3',
    'Follow up with Sprout recruiter', 'It has been a few days since applying.',
-   now() - interval '1 day', 'todo', 'medium'),
+   date_trunc('hour', now()) - interval '1 day', 'todo', 'medium'),
 
   ((select id from auth.users order by created_at limit 1),
    '00000000-0000-0000-0000-0000000000a7',
    'Respond to Globe offer', 'Ask about signing bonus and start date.',
-   now(), 'todo', 'high'),
+   date_trunc('hour', now()), 'todo', 'high'),
 
   ((select id from auth.users order by created_at limit 1),
    '00000000-0000-0000-0000-0000000000a2',
    'Complete an MLOps course module', 'Two chapters before applying to TM.',
-   now() + interval '10 days', 'todo', 'medium'),
+   date_trunc('hour', now()) + interval '10 days', 'todo', 'medium'),
 
   ((select id from auth.users order by created_at limit 1),
    null,
@@ -157,6 +157,6 @@ values
   ((select id from auth.users order by created_at limit 1),
    null,
    'Refresh LinkedIn headline', 'Done — kept for reference.',
-   now() - interval '3 days', 'done', 'low');
+   date_trunc('hour', now()) - interval '3 days', 'done', 'low');
 
 commit;

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createTask } from "@/lib/actions/tasks";
+import { toDueTimestamp } from "@/lib/format";
 import { PRIORITIES, PRIORITY_LABELS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,7 @@ export function QuickAddTask({
 }) {
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [dueTime, setDueTime] = useState("");
   const [priority, setPriority] = useState("medium");
   const [linkedApp, setLinkedApp] = useState(UNLINKED);
   const [isPending, startTransition] = useTransition();
@@ -38,13 +40,14 @@ export function QuickAddTask({
     startTransition(async () => {
       const result = await createTask({
         title,
-        due_date: dueDate || undefined,
+        due_date: toDueTimestamp(dueDate, dueTime),
         priority: priority as (typeof PRIORITIES)[number],
         application_id: applicationId ?? (linkedApp === UNLINKED ? "" : linkedApp),
       });
       if (result.ok) {
         setTitle("");
         setDueDate("");
+        setDueTime("");
         setPriority("medium");
         setLinkedApp(UNLINKED);
       } else {
@@ -67,10 +70,23 @@ export function QuickAddTask({
       <Input
         type="date"
         value={dueDate}
-        onChange={(e) => setDueDate(e.target.value)}
+        onChange={(e) => {
+          setDueDate(e.target.value);
+          if (!e.target.value) setDueTime("");
+        }}
         className="h-9 w-auto"
         aria-label="Due date"
       />
+      {/* Time is optional — a task with no time is treated as all-day. */}
+      {dueDate && (
+        <Input
+          type="time"
+          value={dueTime}
+          onChange={(e) => setDueTime(e.target.value)}
+          className="h-9 w-auto"
+          aria-label="Due time (optional)"
+        />
+      )}
       <Select value={priority} onValueChange={setPriority}>
         <SelectTrigger className="h-9 w-28" aria-label="Priority">
           <SelectValue />
