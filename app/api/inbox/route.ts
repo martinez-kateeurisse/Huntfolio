@@ -3,6 +3,11 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { IS_DEMO } from "@/lib/is-demo";
 import { classifyEmail } from "@/lib/inbox/classify";
+import {
+  INBOX_LOOKBACK_DAYS,
+  INBOX_RESCAN,
+  INBOX_SEARCH,
+} from "@/lib/inbox/apps-script";
 import type { Database } from "@/lib/database.types";
 
 // Receives job-related emails from the user's Gmail Apps Script (see
@@ -25,6 +30,16 @@ const payloadSchema = z.object({
     )
     .max(50),
 });
+
+// The script asks for its settings on every run, so search and rule updates
+// reach it without a re-paste. Nothing here is secret.
+export function GET() {
+  return NextResponse.json({
+    search: INBOX_SEARCH,
+    lookbackDays: INBOX_LOOKBACK_DAYS,
+    rescan: INBOX_RESCAN,
+  });
+}
 
 export async function POST(request: NextRequest) {
   const token = request.headers

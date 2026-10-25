@@ -6,8 +6,9 @@ import {
   getDocuments,
   getApplicationPrep,
   getContactsForApplication,
+  getApplicationEmails,
 } from "@/lib/queries";
-import { daysSince, formatDate, formatSalaryRange } from "@/lib/format";
+import { daysSince, formatDate, formatDateTime, formatSalaryRange } from "@/lib/format";
 import {
   PRIORITY_LABELS,
   CLOSE_REASON_LABELS,
@@ -26,6 +27,7 @@ import { InterviewSection } from "@/components/interviews/interview-section";
 import { AttachDocuments } from "@/components/documents/attach-documents";
 import { PrepSection } from "@/components/prep/prep-section";
 import { ContactSection } from "@/components/contacts/contact-section";
+import { KIND_ICON, KIND_LABEL } from "@/components/inbox/email-kinds";
 
 export const metadata = { title: "Application · Huntfolio" };
 
@@ -48,11 +50,12 @@ export default async function ApplicationDetailPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const [{ id }, { tab }] = await Promise.all([params, searchParams]);
-  const [detail, allDocuments, prep, contacts] = await Promise.all([
+  const [detail, allDocuments, prep, contacts, emails] = await Promise.all([
     getApplicationDetail(id),
     getDocuments(),
     getApplicationPrep(id),
     getContactsForApplication(id),
+    getApplicationEmails(id),
   ]);
   if (!detail) notFound();
 
@@ -163,10 +166,39 @@ export default async function ApplicationDetailPage({
       value: "history",
       label: "History",
       content: (
-        <section className="rounded-xl border bg-card p-5">
-          <h2 className="mb-4 text-sm font-medium">Status history</h2>
-          <StatusTimeline history={history} />
-        </section>
+        <>
+          <section className="rounded-xl border bg-card p-5">
+            <h2 className="mb-4 text-sm font-medium">Status history</h2>
+            <StatusTimeline history={history} />
+          </section>
+          {/* Emails Gmail sync matched to this application (views, messages, outcomes). */}
+          {emails.length > 0 && (
+            <section className="rounded-xl border bg-card p-5">
+              <h2 className="mb-3 text-sm font-medium">From your inbox</h2>
+              <ul className="flex flex-col divide-y">
+                {emails.map((ev) => {
+                  const Icon = KIND_ICON[ev.kind];
+                  return (
+                    <li key={ev.id} className="flex items-start gap-3 py-2.5">
+                      {Icon && <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />}
+                      <div className="min-w-0">
+                        <p className="text-sm">
+                          {KIND_LABEL[ev.kind] ?? "Email"}
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {formatDateTime(ev.received_at)}
+                          </span>
+                        </p>
+                        {ev.subject && (
+                          <p className="truncate text-xs text-muted-foreground">{ev.subject}</p>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+        </>
       ),
     },
   ];

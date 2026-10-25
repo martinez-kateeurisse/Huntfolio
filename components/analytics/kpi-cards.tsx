@@ -22,14 +22,26 @@ function KpiCard({
   );
 }
 
+// From first contact to outcome, left to right: how many you sent, how many
+// employers looked at or answered, and how far they went.
 export function KpiCards({ data }: { data: AnalyticsData }) {
   const { totals } = data;
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       <KpiCard
         label="Applications"
         value={String(totals.applications)}
         hint="Submitted in range"
+      />
+      <KpiCard
+        label="Viewed"
+        value={pct(totals.viewedRate)}
+        hint="Employer opened it"
+      />
+      <KpiCard
+        label="Heard back"
+        value={pct(totals.heardBackRate)}
+        hint="Any reply, incl. no"
       />
       <KpiCard
         label="Response rate"

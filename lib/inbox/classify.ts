@@ -8,6 +8,8 @@ import type { InterviewType } from "@/lib/constants";
 
 export type EmailKind =
   | "applied"
+  | "viewed" // the employer opened your application (JobStreet, LinkedIn)
+  | "message" // the employer wrote to you, without a clear outcome
   | "screening"
   | "interview"
   | "offer"
@@ -40,7 +42,7 @@ const NOISE_SUBJECT =
   /job alert|jobs? (for|matching|similar to)|recommended (jobs|for you)|new jobs|is hiring|jobs you may|top job picks|people also viewed|newsletter|webinar|weekly digest/i;
 
 const REJECTION =
-  /not (to )?(be )?mov(e|ing) forward|decided (not )?to (move|proceed) forward with (other|another)|(move|moving|proceed) forward with other candidates|other candidates (whose|who)|(have|has) not been selected|were not selected|will not be (progressing|proceeding|moving forward)|regret to inform|position has (now )?been filled|no longer (being )?considered|pursue other candidates|not (be )?a (fit|match) at this time/i;
+  /not (to )?(be )?mov(e|ing) forward|decided (not )?to (move|proceed) forward with (other|another)|(move|moving|proceed) forward with other candidates|other candidates (whose|who)|(have|has) not been selected|were not selected|will not be (progressing|proceeding|moving forward)|regret to inform|(position|role|vacancy) (has|have) (already |now )?been filled|already been filled|(application|candidacy) (was|has been|is) unsuccessful|not been successful|no longer (being )?considered|pursue other candidates|not (be )?a (fit|match) at this time/i;
 // A bare "unfortunately" only counts when it's clearly about the application
 // (and not, say, an interviewer rescheduling).
 const SOFT_REJECTION = /\bunfortunately\b[^.]{0,160}\b(application|candidacy|applying|position|role|profile)\b/i;
@@ -55,9 +57,21 @@ const INTERVIEW =
 const SCREENING =
   /(online|technical|coding|skills?|aptitude) (assessment|test|exam|challenge)|take[- ]home|hackerrank|codility|testgorilla|coderbyte|phone screen|screening (call|interview)|initial (call|screening)/i;
 
-const APPLIED =
-  /thank(s| you) for (applying|your application|your interest in)|application (has been |was )?(received|submitted|sent)|(we'?ve|we have|have) received your application|your application (to|for|was sent|has been)|successfully (applied|submitted)|application confirmation/i;
+// "Maxicare viewed your application", "Your application was viewed by Acme".
+// Profile views aren't about a specific application, so they don't count.
+const VIEWED =
+  /\bviewed your (application|resume|cv)\b|your (application|resume|cv) was viewed|you[’']?re getting noticed/i;
 
+// An employer wrote to you (JobStreet/LinkedIn messages, "replied to your
+// application"). Only used when nothing more specific matched.
+const MESSAGE =
+  /has sent you a (new )?message|sent you a (new )?message|you have a new message from|replied to your application|responded to your application/i;
+
+const APPLIED =
+  /thank(s| you) for (applying|your application|your interest in)|application (has been |was )?(received|submitted|sent)|(we[’']?ve|we have|have) received your application|your application (to|for|was sent|has been)|successfully (applied|submitted)|application confirmation/i;
+
+// Most decisive first: an outcome beats a view, a view beats a plain
+// confirmation (view emails also say "your application").
 function kindOf(subject: string, text: string): EmailKind | null {
   if (NOISE_SUBJECT.test(subject)) return null;
   if (REJECTION.test(text) || (SOFT_REJECTION.test(text) && !RESCHEDULE.test(text))) {
@@ -66,6 +80,8 @@ function kindOf(subject: string, text: string): EmailKind | null {
   if (OFFER.test(text)) return "offer";
   if (/\binterview\b/i.test(subject) || INTERVIEW.test(text)) return "interview";
   if (SCREENING.test(text)) return "screening";
+  if (VIEWED.test(text)) return "viewed";
+  if (MESSAGE.test(text)) return "message";
   if (APPLIED.test(text)) return "applied";
   return null;
 }
@@ -126,9 +142,18 @@ const END = "(?=\\s*(?:[.!,:;|()\\n]|$|\\s-\\s|\\s–\\s|\\s(?:has|was|is|for|an
 
 // Phrasings that almost always name the employer.
 const STRONG_PATTERNS = [
-  new RegExp(`application was sent to\\s+${NAME}${END}`),
+  // "…was successfully submitted to RIA Advisory LLC." / "…was sent to Acme"
+  new RegExp(`(?:submitted|sent)\\s+to\\s+${NAME}${END}`),
   new RegExp(`(?:applying|application|applied|interest)\\s+(?:to|with|at)\\s+${NAME}${END}`),
+  // "Maxicare Healthcare Corporation has viewed your application"
+  new RegExp(`${NAME}\\s+(?:has\\s+)?viewed your (?:application|resume|cv)`),
+  // "Your application was viewed by Acme"
+  new RegExp(`was viewed by\\s+${NAME}${END}`),
+  // "Julie . from Maxicare Healthcare Corporation has sent you a message"
+  new RegExp(`\\b(?:from|at)\\s+${NAME}\\s+has sent you`),
 ];
+// Job-board relay senders: "Julie Ann . at Maxicare Healthcare Corporation via Jobstreet".
+const VIA_SENDER = new RegExp(`\\b(?:at|from)\\s+${NAME}\\s+via\\s+[A-Za-z]+\\s*$`);
 // Looser ones ("Role at X", "from X", "interview with X") can also catch a
 // person or a tool, so they rank below the sender's own domain.
 const WEAK_PATTERNS = [
@@ -154,10 +179,15 @@ function companyFromText(text: string, patterns: RegExp[]): string | null {
   return null;
 }
 
-const ROLE = "([A-Z][A-Za-z0-9/&+#.()’'\\- ]{2,60}?)";
+const ROLE = "([A-Z][A-Za-z0-9/&+#.()’'\\- ]{2,80}?)";
+const ROLE_END = "(?=\\s*(?:[.!,;\\n]|$))";
 const ROLE_PATTERNS = [
   new RegExp(`(?:for|as|in)\\s+(?:(?:the|a|an|our)\\s+)?${ROLE}\\s+(?:position|role|opening|vacancy|job)\\b`),
   new RegExp(`(?:application|applying|applied)\\s+(?:for|to)\\s+(?:the\\s+)?${ROLE}\\s+(?:at|with|position|role)\\b`),
+  // JobStreet: "Your application for Data Analyst was successfully submitted"
+  new RegExp(`application for\\s+(?:the\\s+)?${ROLE}\\s+(?:was|has been|is)\\b`),
+  // "…viewed your application for Data Analyst."
+  new RegExp(`viewed your application for\\s+(?:the\\s+)?${ROLE}${ROLE_END}`),
 ];
 // "Frontend Engineer at Acme" — only trusted in a subject line; in a body it
 // matches whole sentences.
@@ -277,6 +307,7 @@ export function classifyEmail(email: RawEmail): ClassifiedEmail {
   const company =
     companyFromText(subject, STRONG_PATTERNS) ??
     companyFromText(lead, STRONG_PATTERNS) ??
+    (fromName ? companyFromText(fromName, [VIA_SENDER]) : null) ??
     (senderLooksLikeCompany && senderName ? cleanCompany(senderName) : null) ??
     companyFromDomain(fromEmail) ??
     companyFromText(subject, WEAK_PATTERNS) ??

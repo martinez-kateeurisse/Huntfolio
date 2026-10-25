@@ -513,6 +513,7 @@ export function demoGetApplicationsWithSignals(): ApplicationWithSignals[] {
       ...a,
       nextTaskDue: nextTask.get(a.id) ?? null,
       nextInterviewAt: nextInterview.get(a.id) ?? null,
+      viewedAt: null,
     }));
 }
 

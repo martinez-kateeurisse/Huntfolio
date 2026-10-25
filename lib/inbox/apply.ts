@@ -23,8 +23,12 @@ type AppLite = {
   created_at: string | null;
 };
 
+// The status each kind of email implies, at minimum. A view or a message
+// proves you applied, but says nothing more about where things stand.
 const KIND_STATUS: Record<EmailKind, Status> = {
   applied: "applied",
+  viewed: "applied",
+  message: "applied",
   screening: "screening",
   interview: "interview",
   offer: "offer",
@@ -150,6 +154,27 @@ async function applyEvent(
       target === "closed"
         ? `${app.company} closed (rejected)`
         : `${app.company} moved to ${STATUS_LABELS[target]}`,
+    );
+  }
+
+  // Views and messages are worth logging even when nothing else changes:
+  // they feed the Viewed / Heard back numbers in Insights.
+  if (ev.kind === "viewed" || ev.kind === "message") {
+    const employerActive = ev.kind === "message";
+    if (app.status === "no_response" || employerActive) {
+      // Any sign of life takes it out of "No response"; a message also
+      // restarts the 60-day clock (the update bumps updated_at).
+      const { error } = await supabase
+        .from("applications")
+        .update(app.status === "no_response" ? { status: "applied" } : { updated_at: new Date().toISOString() })
+        .eq("id", app.id);
+      if (error) throw new Error(error.message);
+      if (app.status === "no_response") app.status = "applied";
+    }
+    notes.push(
+      ev.kind === "viewed"
+        ? `${app.company} viewed your application`
+        : `Message from ${app.company}`,
     );
   }
 

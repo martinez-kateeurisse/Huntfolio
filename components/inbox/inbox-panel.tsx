@@ -3,30 +3,14 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { formatDistanceToNowStrict } from "date-fns";
-import {
-  CalendarClock,
-  CircleSlash,
-  Loader2,
-  Mail,
-  PartyPopper,
-  Send,
-  Sparkles,
-  XCircle,
-} from "lucide-react";
+import { CircleSlash, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { InboxStatus } from "@/lib/queries";
 import { addInboxEmailsNow } from "@/lib/actions/inbox";
 import { Button } from "@/components/ui/button";
 import { ConnectGmailDialog } from "@/components/inbox/connect-gmail-dialog";
-
-const KIND_ICON: Record<string, React.ElementType> = {
-  applied: Send,
-  screening: Sparkles,
-  interview: CalendarClock,
-  offer: PartyPopper,
-  rejection: XCircle,
-};
+import { KIND_ICON } from "@/components/inbox/email-kinds";
 
 // What the Gmail script recently changed, so automatic updates are never
 // invisible. Each entry links to the application, which stays fully editable.

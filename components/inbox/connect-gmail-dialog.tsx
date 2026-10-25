@@ -83,9 +83,10 @@ export function ConnectGmailDialog({
           <DialogTitle>{connected ? "Gmail sync" : "Connect Gmail"}</DialogTitle>
           <DialogDescription>
             A small script in your own Google account checks for job emails
-            every hour and updates Huntfolio — new applications, interviews,
-            rejections and offers. Only matching emails are sent, and only
-            their sender, subject, date and a short excerpt.
+            every hour and updates Huntfolio: submitted and viewed
+            applications, employer messages, interviews, rejections and
+            offers. Only matching emails are sent, and only their sender,
+            subject, date and a short excerpt.
           </DialogDescription>
         </DialogHeader>
 
@@ -179,7 +180,7 @@ export function ConnectGmailDialog({
                 </li>
               </ol>
               <p className="text-muted-foreground">
-                That&apos;s it. It checks the last 30 days right away, then every
+                That&apos;s it. It checks the last 90 days right away, then every
                 hour. To stop it, delete the project in Google.
               </p>
             </div>

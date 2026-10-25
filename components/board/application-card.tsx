@@ -6,6 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   CalendarClock,
   Clock,
+  Eye,
   ListChecks,
   MoreHorizontal,
   Pencil,
@@ -40,7 +41,8 @@ const STATUS_ACCENT: Partial<Record<Status, string>> = {
 };
 
 function Signal({ app }: { app: ApplicationWithSignals }) {
-  // Priority: scheduled interview > next task due > days since applied.
+  // Priority: scheduled interview > next task due > employer viewed it
+  // (while still waiting at Applied) > days since applied.
   if (app.nextInterviewAt) {
     return (
       <span className="inline-flex min-w-0 items-center gap-1 truncate text-[11px] text-amber-600 dark:text-amber-400">
@@ -68,6 +70,15 @@ function Signal({ app }: { app: ApplicationWithSignals }) {
         </span>
       );
     }
+  }
+  if (app.viewedAt && (app.status === "applied" || app.status === "no_response")) {
+    const n = daysSince(app.viewedAt);
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-sky-600 dark:text-sky-400">
+        <Eye className="size-3 shrink-0" />
+        {n === 0 ? "Viewed today" : `Viewed ${n}d ago`}
+      </span>
+    );
   }
   if (app.date_applied && APPLIED_OR_BEYOND.includes(app.status as Status)) {
     const n = daysSince(app.date_applied);
@@ -208,7 +219,7 @@ export function ApplicationCard({
         )}
       </div>
 
-      {(app.track || app.nextInterviewAt || app.nextTaskDue || app.date_applied) && (
+      {(app.track || app.nextInterviewAt || app.nextTaskDue || app.viewedAt || app.date_applied) && (
         <div
           className={cn(
             "mt-1.5 flex min-w-0 items-center gap-1.5",

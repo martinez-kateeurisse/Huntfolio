@@ -41,6 +41,7 @@ import {
   type AnalyticsFilters,
   type AppRow,
   type HistoryRow,
+  type SignalRow,
 } from "@/lib/analytics";
 import { computeReminders, type Nudge } from "@/lib/reminders";
 import { applyInboxEvents } from "@/lib/inbox/apply";
@@ -49,6 +50,7 @@ import { applyInboxEvents } from "@/lib/inbox/apply";
 export type ApplicationWithSignals = Application & {
   nextTaskDue: string | null;
   nextInterviewAt: string | null;
+  viewedAt: string | null; // latest "employer viewed your application" email
 };
 
 // A task row enriched with its application's company, for the tasks list.
@@ -222,6 +224,16 @@ export async function getApplicationsWithSignals(): Promise<
   if (IS_DEMO) return demoGetApplicationsWithSignals();
   const { supabase } = await requireUserId();
 
+  // Gmail sync data is optional (its tables may not exist yet), so it's
+  // fetched alongside but never fails the board.
+  const viewedPromise = Promise.resolve(
+    supabase
+      .from("inbox_events")
+      .select("application_id, received_at")
+      .eq("kind", "viewed")
+      .eq("status", "done")
+      .order("received_at", { ascending: false }),
+  );
   const results = await Promise.all([
     supabase
       .from("applications")
@@ -242,6 +254,7 @@ export async function getApplicationsWithSignals(): Promise<
   ]);
   assertOk(...results);
   const [{ data: apps }, { data: tasks }, { data: interviews }] = results;
+  const viewed = await viewedPromise;
 
   // First seen wins because both lists are sorted ascending by date.
   const nextTask = new Map<string, string>();
@@ -261,10 +274,19 @@ export async function getApplicationsWithSignals(): Promise<
     }
   }
 
+  // Newest first, so first seen is the latest view.
+  const lastViewed = new Map<string, string>();
+  for (const v of viewed.error ? [] : (viewed.data ?? [])) {
+    if (v.application_id && !lastViewed.has(v.application_id)) {
+      lastViewed.set(v.application_id, v.received_at);
+    }
+  }
+
   return (apps ?? []).map((a) => ({
     ...a,
     nextTaskDue: nextTask.get(a.id) ?? null,
     nextInterviewAt: nextInterview.get(a.id) ?? null,
+    viewedAt: lastViewed.get(a.id) ?? null,
   }));
 }
 
@@ -523,22 +545,49 @@ export async function getAnalytics(
   }
 
   const { supabase } = await requireUserId();
+  // Employer activity from Gmail sync feeds Viewed / Heard back. Optional:
+  // without the inbox tables those fall back to status history alone.
+  const signalsPromise = Promise.resolve(
+    supabase
+      .from("inbox_events")
+      .select("application_id, kind")
+      .eq("status", "done")
+      .not("application_id", "is", null),
+  );
   const results = await Promise.all([
     supabase
       .from("applications")
-      .select("id, track, source, date_applied, status"),
+      .select("id, track, source, date_applied, status, close_reason"),
     supabase
       .from("status_history")
       .select("application_id, to_status, changed_at"),
   ]);
   assertOk(...results);
   const [{ data: apps }, { data: history }] = results;
+  const signals = await signalsPromise;
 
   return computeAnalytics(
     (apps ?? []) as AppRow[],
     (history ?? []) as HistoryRow[],
     filters,
+    signals.error ? [] : ((signals.data ?? []) as SignalRow[]),
   );
+}
+
+// Emails Gmail sync matched to one application, newest first, for its
+// History tab. Empty in demo mode or before the inbox migration.
+export async function getApplicationEmails(
+  applicationId: string,
+): Promise<InboxEvent[]> {
+  if (IS_DEMO) return [];
+  const { supabase } = await requireUserId();
+  const res = await supabase
+    .from("inbox_events")
+    .select("*")
+    .eq("application_id", applicationId)
+    .neq("status", "pending")
+    .order("received_at", { ascending: false });
+  return res.error ? [] : (res.data ?? []);
 }
 
 export async function getReminders(): Promise<Nudge[]> {

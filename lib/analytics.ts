@@ -43,6 +43,13 @@ export type AppRow = {
   source: string | null;
   date_applied: string | null;
   status: string;
+  close_reason?: string | null;
+};
+// Employer activity seen in email (from Gmail sync): a "viewed your
+// application" notice, a message, or an outcome.
+export type SignalRow = {
+  application_id: string | null;
+  kind: string;
 };
 export type HistoryRow = {
   application_id: string;
@@ -83,6 +90,8 @@ export type AnalyticsData = {
   hasEnoughData: boolean;
   totals: {
     applications: number;
+    viewedRate: number | null; // employer viewed, replied, or moved it forward
+    heardBackRate: number | null; // any reply, rejections included
     responseRate: number | null;
     interviewRate: number | null;
     offerRate: number | null;
@@ -132,6 +141,7 @@ export function computeAnalytics(
   apps: AppRow[],
   history: HistoryRow[],
   filters: AnalyticsFilters = {},
+  signals: SignalRow[] = [],
 ): AnalyticsData {
   const { track = "all", from = null, to = null } = filters;
   const historyByApp = groupHistory(history);
@@ -165,8 +175,31 @@ export function computeAnalytics(
   }
 
   const applied = counts.applied;
+
+  // Heard back: moved past Applied, closed as rejected, or any employer email
+  // other than a bare "viewed". Viewed: heard back, or a "viewed" notice.
+  const viewedIds = new Set<string>();
+  const repliedIds = new Set<string>();
+  for (const s of signals) {
+    if (!s.application_id) continue;
+    if (s.kind === "viewed") viewedIds.add(s.application_id);
+    else if (s.kind !== "applied") repliedIds.add(s.application_id);
+  }
+  let viewed = 0;
+  let heardBack = 0;
+  for (const a of inScope) {
+    const replied =
+      maxStageReached(historyByApp.get(a.id) ?? []) >= stageIndex("screening") ||
+      (a.status === "closed" && a.close_reason === "rejected") ||
+      repliedIds.has(a.id);
+    if (replied) heardBack++;
+    if (replied || viewedIds.has(a.id)) viewed++;
+  }
+
   const totals = {
     applications: applied,
+    viewedRate: applied === 0 ? null : viewed / applied,
+    heardBackRate: applied === 0 ? null : heardBack / applied,
     responseRate: applied === 0 ? null : counts.screening / applied,
     interviewRate: applied === 0 ? null : counts.interview / applied,
     offerRate: applied === 0 ? null : counts.offer / applied,

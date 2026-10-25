@@ -40,8 +40,9 @@ The app is organized into five areas: **Today**, **Applications**,
   response rate by source, average time-in-stage, and applications over time.
 - **Gmail sync** *(optional)* — a small Google Apps Script in your own account
   checks for job emails every hour. Keyword rules (no AI) turn confirmations,
-  interview invites, rejections and offers into new applications, status
-  changes and interviews, logged on Today. Only matching emails are sent, and
+  "viewed your application" notices, employer messages, interview invites,
+  rejections and offers into new applications, status changes and interviews,
+  logged on Today and counted in Insights (Viewed / Heard back). Only matching emails are sent, and
   only sender, subject, date and a short excerpt are kept.
 - **AI resume tailoring** *(optional)* — sends a job description and one of your
   resumes to a model via OpenRouter (server-side) and returns tailoring
@@ -85,6 +86,8 @@ In the Supabase **SQL Editor**, run the migrations in order:
    its access policies.
 3. `supabase/migrations/0003_inbox.sql` — tables for Gmail sync (optional; the
    rest of the app works without it).
+4. `supabase/migrations/0004_inbox_reprocess.sql` — lets improved Gmail rules
+   re-read emails they misread before.
 
 ### 3. Enable auth
 
