@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { applicationSchema, type ApplicationFormValues } from "@/lib/schemas";
-import { APPLIED_OR_BEYOND, type Status } from "@/lib/constants";
+import { APPLIED_OR_BEYOND, STATUSES, type Status } from "@/lib/constants";
 import type { ApplicationInsert, ApplicationUpdate } from "@/lib/database.types";
 import {
   IS_DEMO,
@@ -192,5 +192,47 @@ export async function updateApplicationStatus(
 
   if (error) return { ok: false, error: error.message };
   revalidateAll(id);
+  return { ok: true };
+}
+
+// Multi-select on the board: move several applications in one update. The DB
+// trigger still logs a history row for each one that actually changes.
+export async function updateApplicationsStatus(
+  ids: string[],
+  status: Status,
+  closeReason?: string | null,
+): Promise<ActionResult> {
+  if (ids.length === 0) return { ok: true };
+  if (!STATUSES.includes(status)) return { ok: false, error: "Unknown status" };
+
+  if (IS_DEMO) {
+    for (const id of ids) demoUpdateApplicationStatus(id, status, closeReason);
+    revalidateAll();
+    return { ok: true };
+  }
+
+  const { supabase } = await requireUser();
+
+  const { error } = await supabase
+    .from("applications")
+    .update({
+      status,
+      close_reason: status === "closed" ? (closeReason ?? null) : null,
+    })
+    .in("id", ids)
+    .neq("status", status);
+  if (error) return { ok: false, error: error.message };
+
+  // Stamp date_applied on any that reach applied-or-beyond for the first time.
+  if (APPLIED_OR_BEYOND.includes(status)) {
+    const { error: stampError } = await supabase
+      .from("applications")
+      .update({ date_applied: new Date().toISOString() })
+      .in("id", ids)
+      .is("date_applied", null);
+    if (stampError) return { ok: false, error: stampError.message };
+  }
+
+  revalidateAll();
   return { ok: true };
 }

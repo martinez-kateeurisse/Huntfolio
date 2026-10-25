@@ -25,6 +25,7 @@ export const STATUSES = [
   "screening",
   "interview",
   "offer",
+  "no_response",
   "closed",
 ] as const;
 export type Status = (typeof STATUSES)[number];
@@ -35,6 +36,7 @@ export const STATUS_LABELS: Record<Status, string> = {
   screening: "Screening",
   interview: "Interview",
   offer: "Offer",
+  no_response: "No response",
   closed: "Closed",
 };
 
@@ -48,6 +50,7 @@ export const APPLIED_OR_BEYOND: Status[] = [
   "screening",
   "interview",
   "offer",
+  "no_response",
   "closed",
 ];
 export const RESPONDED_STATUSES: Status[] = [
@@ -55,6 +58,13 @@ export const RESPONDED_STATUSES: Status[] = [
   "interview",
   "offer",
 ];
+
+// No longer in play: not counted as active, and never nagged about.
+export const INACTIVE_STATUSES: Status[] = ["no_response", "closed"];
+
+// An application still sitting in "Applied" with no activity for this long
+// moves itself to "No response" (see sweepNoResponse in lib/queries.ts).
+export const NO_RESPONSE_AFTER_DAYS = 60;
 
 export const SOURCES = [
   "JobStreet",

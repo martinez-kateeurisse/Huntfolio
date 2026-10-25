@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { isAuthRetryableFetchError } from "@supabase/supabase-js";
-import { CheckCircle2, KeyRound, Loader2, Mail } from "lucide-react";
+import { CheckCircle2, KeyRound, Loader2, LogIn, Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,22 +24,61 @@ function friendlyError(error: Error): string {
   return error.message;
 }
 
+type Mode = "password" | "link";
+type Status = "idle" | "working" | "sent" | "verifying";
+
+// Email + password is the everyday way in. The emailed link (or code) is the
+// fallback for the first sign-in, a forgotten password, or a new device —
+// after using it, set a password from the account menu.
 export function LoginForm({ initialError }: { initialError: string | null }) {
   const router = useRouter();
+  // Arriving from a broken email link, the next step is a fresh link.
+  const [mode, setMode] = useState<Mode>(initialError ? "link" : "password");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
-  const [status, setStatus] = useState<
-    "idle" | "sending" | "sent" | "verifying"
-  >("idle");
+  const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(initialError);
 
-  async function handleSubmit(e: React.FormEvent) {
+  function signedIn() {
+    router.replace("/");
+    router.refresh();
+  }
+
+  function switchMode(next: Mode) {
+    setMode(next);
+    setStatus("idle");
+    setError(null);
+  }
+
+  async function handlePassword(e: React.FormEvent) {
     e.preventDefault();
-    setStatus("sending");
+    setStatus("working");
     setError(null);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await createClient().auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setError(
+        isAuthRetryableFetchError(error)
+          ? friendlyError(error)
+          : "Wrong email or password. No password yet? Sign in with an email link once, then set one from the account menu.",
+      );
+      setStatus("idle");
+    } else {
+      signedIn();
+    }
+  }
+
+  async function handleSendLink(e: React.FormEvent) {
+    e.preventDefault();
+    setStatus("working");
+    setError(null);
+
+    const { error } = await createClient().auth.signInWithOtp({
       email,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
@@ -62,8 +101,7 @@ export function LoginForm({ initialError }: { initialError: string | null }) {
     setStatus("verifying");
     setError(null);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.verifyOtp({
+    const { error } = await createClient().auth.verifyOtp({
       email,
       token: code.trim(),
       type: "email",
@@ -77,12 +115,13 @@ export function LoginForm({ initialError }: { initialError: string | null }) {
       );
       setStatus("sent");
     } else {
-      router.replace("/");
-      router.refresh();
+      signedIn();
     }
   }
 
-  if (status === "sent" || status === "verifying") {
+  const working = status === "working" || status === "verifying";
+
+  if (mode === "link" && (status === "sent" || status === "verifying")) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center gap-4 py-8 text-center">
@@ -109,15 +148,15 @@ export function LoginForm({ initialError }: { initialError: string | null }) {
                 maxLength={10}
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                disabled={status === "verifying"}
+                disabled={working}
                 className="text-center tracking-widest"
               />
               <Button
                 type="submit"
                 variant="secondary"
-                disabled={status === "verifying" || code.length < 6}
+                disabled={working || code.length < 6}
               >
-                {status === "verifying" ? (
+                {working ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
                   <KeyRound className="size-4" />
@@ -132,13 +171,63 @@ export function LoginForm({ initialError }: { initialError: string | null }) {
             variant="ghost"
             size="sm"
             onClick={() => {
-              setStatus("idle");
               setCode("");
-              setError(null);
+              switchMode("password");
             }}
           >
-            Use a different email
+            Back to sign in
           </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const emailField = (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor="email">Email</Label>
+      <Input
+        id="email"
+        type="email"
+        autoComplete="email"
+        placeholder="you@example.com"
+        required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        disabled={working}
+      />
+    </div>
+  );
+
+  if (mode === "link") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Email me a sign-in link</CardTitle>
+          <CardDescription>
+            For your first sign-in, a forgotten password, or a new device.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSendLink} className="flex flex-col gap-4">
+            {emailField}
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" disabled={working || !email}>
+              {working ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Mail className="size-4" />
+              )}
+              Send link
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => switchMode("password")}
+            >
+              Sign in with password instead
+            </Button>
+          </form>
         </CardContent>
       </Card>
     );
@@ -148,34 +237,39 @@ export function LoginForm({ initialError }: { initialError: string | null }) {
     <Card>
       <CardHeader>
         <CardTitle>Sign in</CardTitle>
-        <CardDescription>
-          Enter your email and we&apos;ll send you a magic link — no password
-          needed.
-        </CardDescription>
+        <CardDescription>Welcome back — pick up where you left off.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handlePassword} className="flex flex-col gap-4">
+          {emailField}
           <div className="flex flex-col gap-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="password">Password</Label>
             <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.com"
+              id="password"
+              type="password"
+              autoComplete="current-password"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={status === "sending"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={working}
             />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" disabled={status === "sending" || !email}>
-            {status === "sending" ? (
+          <Button type="submit" disabled={working || !email || !password}>
+            {working ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
-              <Mail className="size-4" />
+              <LogIn className="size-4" />
             )}
-            Send magic link
+            Sign in
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => switchMode("link")}
+          >
+            Forgot password or first time? Email me a link
           </Button>
         </form>
       </CardContent>

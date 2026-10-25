@@ -15,8 +15,11 @@ The app is organized into five areas: **Today**, **Applications**,
 - **Today** — the home page: tasks due in the next few days, people to follow
   up with, upcoming interviews, and three headline stats.
 - **Pipeline board** — Kanban across `Saved → Applied → Screening → Interview →
-  Offer → Closed`, with drag-and-drop that persists status (and prompts for a
-  reason when you close an application). Search, filter by track, and keep
+  Offer → No response → Closed`, with drag-and-drop that persists status (and
+  prompts for a reason when you close an application). Applications still in
+  Applied with no activity for 60 days move to **No response** on their own.
+  Select several cards (Select button, or Ctrl/⌘-click) to drag or move them
+  together. Search, filter by track, and keep
   Closed applications out of the way until you want them. Cards surface a
   contextual signal — days since applied, next task due, or an upcoming
   interview.
@@ -38,8 +41,10 @@ The app is organized into five areas: **Today**, **Applications**,
 - **AI resume tailoring** *(optional)* — sends a job description and one of your
   resumes to a model via OpenRouter (server-side) and returns tailoring
   guidance, saved to your prep notes.
-- Magic-link (or one-time code) auth with Row Level Security, role-track tags,
-  dark mode, and a responsive layout with a bottom tab bar on phones.
+- Email + password sign-in (with an email link or one-time code as the
+  fallback for first sign-in or a forgotten password), Row Level Security,
+  role-track tags, dark mode, and a responsive layout with a bottom tab bar on
+  phones.
 
 ## Tech stack
 
@@ -93,8 +98,9 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and sign in with the
-magic link sent to your email.
+Open [http://localhost:3000](http://localhost:3000). The first time, choose
+**Email me a link** and sign in from your inbox; then open the account menu →
+**Set password** so future sign-ins are just email + password.
 
 > **Optional:** run `supabase/seed.sql` (after signing in once) to load sample
 > data, and add `OPENROUTER_API_KEY` to `.env.local` to enable AI resume

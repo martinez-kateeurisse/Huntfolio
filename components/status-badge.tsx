@@ -10,6 +10,7 @@ const STATUS_CLASS: Record<Status, string> = {
     "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
   offer:
     "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  no_response: "bg-muted text-muted-foreground",
   closed: "bg-muted text-muted-foreground",
 };
 

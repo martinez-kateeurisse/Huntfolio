@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -7,10 +8,12 @@ import {
   Briefcase,
   CalendarDays,
   House,
+  KeyRound,
   Library,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { IS_DEMO } from "@/lib/is-demo";
 import { NAV_AREAS, areaOf, type NavArea } from "@/lib/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -23,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/lib/actions/auth";
+import { SetPasswordDialog } from "@/components/auth/set-password-dialog";
 
 const ICONS: Record<NavArea, React.ElementType> = {
   today: House,
@@ -35,6 +39,7 @@ const ICONS: Record<NavArea, React.ElementType> = {
 // Top bar: brand, the five areas (desktop), theme + account.
 export function Nav({ email }: { email: string | null }) {
   const active = areaOf(usePathname());
+  const [settingPassword, setSettingPassword] = useState(false);
 
   return (
     <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur">
@@ -84,6 +89,12 @@ export function Nav({ email }: { email: string | null }) {
                 {email ?? "Signed in"}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              {!IS_DEMO && (
+                <DropdownMenuItem onClick={() => setSettingPassword(true)}>
+                  <KeyRound className="mr-2 size-4" />
+                  Set password
+                </DropdownMenuItem>
+              )}
               <form action={signOut}>
                 <button type="submit" className="w-full">
                   <DropdownMenuItem className="cursor-pointer" asChild>
@@ -96,6 +107,10 @@ export function Nav({ email }: { email: string | null }) {
               </form>
             </DropdownMenuContent>
           </DropdownMenu>
+          <SetPasswordDialog
+            open={settingPassword}
+            onOpenChange={setSettingPassword}
+          />
         </div>
       </div>
     </header>

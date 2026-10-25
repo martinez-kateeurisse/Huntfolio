@@ -1,7 +1,10 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/supabase/server";
 import {
   APPLIED_OR_BEYOND,
+  INACTIVE_STATUSES,
+  NO_RESPONSE_AFTER_DAYS,
   RESPONDED_STATUSES,
   type Status,
 } from "@/lib/constants";
@@ -29,6 +32,7 @@ import {
   demoGetContacts,
   demoGetContactsForApplication,
   demoGetReminderRaw,
+  demoSweepNoResponse,
 } from "@/lib/demo";
 import {
   computeAnalytics,
@@ -94,10 +98,41 @@ function assertOk(...results: { error: { message: string } | null }[]) {
   if (failed?.error) throw new Error(failed.error.message);
 }
 
+// Applications left in "Applied" with no activity for NO_RESPONSE_AFTER_DAYS
+// move to "No response" on their own. This runs lazily before the reads that
+// show statuses (no background job needed), at most hourly per user per
+// server instance. The update is idempotent, so a skipped or repeated run is
+// harmless. Moving a card back to Applied bumps updated_at, resetting the clock.
+const SWEEP_EVERY_MS = 60 * 60 * 1000;
+const lastSweepAt = new Map<string, number>();
+
+const sweepNoResponse = cache(async () => {
+  if (IS_DEMO) return demoSweepNoResponse();
+  const { supabase, userId } = await requireUserId();
+  if (Date.now() - (lastSweepAt.get(userId) ?? 0) < SWEEP_EVERY_MS) return;
+  lastSweepAt.set(userId, Date.now());
+
+  const cutoff = new Date(
+    Date.now() - NO_RESPONSE_AFTER_DAYS * 86_400_000,
+  ).toISOString();
+  const { error } = await supabase
+    .from("applications")
+    .update({ status: "no_response" })
+    .eq("status", "applied")
+    .lt("date_applied", cutoff)
+    .lt("updated_at", cutoff);
+  // Not worth failing the page over; the next visit retries.
+  if (error) {
+    lastSweepAt.delete(userId);
+    console.error("No-response sweep failed:", error.message);
+  }
+});
+
 // All applications with their board signals (next task due, next interview).
 export async function getApplicationsWithSignals(): Promise<
   ApplicationWithSignals[]
 > {
+  await sweepNoResponse();
   if (IS_DEMO) return demoGetApplicationsWithSignals();
   const { supabase } = await requireUserId();
 
@@ -149,6 +184,7 @@ export async function getApplicationsWithSignals(): Promise<
 
 // Flat list of applications (for the table view).
 export async function getApplications(): Promise<Application[]> {
+  await sweepNoResponse();
   if (IS_DEMO) return demoGetApplications();
   const { supabase } = await requireUserId();
   const res = await supabase
@@ -162,6 +198,7 @@ export async function getApplications(): Promise<Application[]> {
 export async function getApplicationDetail(
   id: string,
 ): Promise<ApplicationDetail | null> {
+  await sweepNoResponse();
   if (IS_DEMO) return demoGetApplicationDetail(id);
   const { supabase } = await requireUserId();
 
@@ -393,6 +430,7 @@ export async function getCalendarEvents(
 export async function getAnalytics(
   filters: AnalyticsFilters,
 ): Promise<AnalyticsData> {
+  await sweepNoResponse();
   if (IS_DEMO) {
     const { apps, history } = demoGetAnalyticsRaw();
     return computeAnalytics(apps, history, filters);
@@ -418,6 +456,7 @@ export async function getAnalytics(
 }
 
 export async function getReminders(): Promise<Nudge[]> {
+  await sweepNoResponse();
   if (IS_DEMO) {
     const raw = demoGetReminderRaw();
     return computeReminders(raw);
@@ -445,6 +484,7 @@ export async function getReminders(): Promise<Nudge[]> {
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
+  await sweepNoResponse();
   if (IS_DEMO) return demoGetDashboardStats();
   const { supabase } = await requireUserId();
 
@@ -466,7 +506,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   assertOk(...results);
   const [{ data: apps }, { data: history }, { data: dueTasks }] = results;
 
-  const active = (apps ?? []).filter((a) => a.status !== "closed").length;
+  const active = (apps ?? []).filter(
+    (a) => !INACTIVE_STATUSES.includes(a.status as Status),
+  ).length;
   const appliedThisWeek = (apps ?? []).filter(
     (a) => a.date_applied && a.date_applied >= weekAgo,
   ).length;

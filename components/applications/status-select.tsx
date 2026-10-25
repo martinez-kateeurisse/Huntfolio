@@ -61,7 +61,8 @@ export function StatusSelect({
     <div className="flex items-center gap-2">
       <Select value={value} onValueChange={onChange} disabled={isPending}>
         <SelectTrigger size="sm" className="w-36" aria-label="Status">
-          <SelectValue />
+          {/* Explicit label so it renders on the server, not only after hydration. */}
+          <SelectValue>{STATUS_LABELS[value]}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {STATUSES.map((s) => (

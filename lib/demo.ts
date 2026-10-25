@@ -31,7 +31,13 @@ import type {
   PrepNoteFormValues,
   ContactFormValues,
 } from "@/lib/schemas";
-import { APPLIED_OR_BEYOND, RESPONDED_STATUSES, type Status } from "@/lib/constants";
+import {
+  APPLIED_OR_BEYOND,
+  INACTIVE_STATUSES,
+  NO_RESPONSE_AFTER_DAYS,
+  RESPONDED_STATUSES,
+  type Status,
+} from "@/lib/constants";
 import { IS_DEMO } from "@/lib/is-demo";
 
 export { IS_DEMO };
@@ -103,6 +109,8 @@ function chainFor(status: Status): Status[] {
       return ["saved", "applied", "screening", "interview"];
     case "offer":
       return ["saved", "applied", "screening", "interview", "offer"];
+    case "no_response":
+      return ["saved", "applied", "no_response"];
     case "closed":
       return ["saved", "applied", "closed"];
     default:
@@ -243,6 +251,20 @@ function seed(): DemoState {
       date_applied: daysAgo(18),
       created_at: daysAgo(20),
       date_saved: daysAgo(20),
+    }),
+    // Applied long ago and never heard back: the sweep moves it to No response.
+    makeApp("demo-a9", {
+      company: "Accenture",
+      role_title: "Software Engineer",
+      track: "dev",
+      source: "Company site",
+      location: "Taguig City",
+      work_mode: "Hybrid",
+      status: "applied",
+      date_applied: daysAgo(70),
+      created_at: daysAgo(72),
+      date_saved: daysAgo(72),
+      updated_at: daysAgo(70),
     }),
   ];
 
@@ -655,7 +677,9 @@ export function demoGetDashboardStats(): DashboardStats {
   const weekAgo = daysAgo(7);
   const inThree = daysFromNow(3);
 
-  const active = s.applications.filter((a) => a.status !== "closed").length;
+  const active = s.applications.filter(
+    (a) => !INACTIVE_STATUSES.includes(a.status as Status),
+  ).length;
   const appliedThisWeek = s.applications.filter(
     (a) => a.date_applied && a.date_applied >= weekAgo,
   ).length;
@@ -778,6 +802,21 @@ export function demoUpdateApplicationStatus(
   }
   app.updated_at = iso(now());
   logHistory(id, prev, status);
+}
+
+// Same rule as sweepNoResponse in lib/queries.ts.
+export function demoSweepNoResponse() {
+  const cutoff = iso(now() - NO_RESPONSE_AFTER_DAYS * 86_400_000);
+  for (const app of store().applications) {
+    if (
+      app.status === "applied" &&
+      app.date_applied &&
+      app.date_applied < cutoff &&
+      (app.updated_at ?? "") < cutoff
+    ) {
+      demoUpdateApplicationStatus(app.id, "no_response");
+    }
+  }
 }
 
 // ---- task mutations ----

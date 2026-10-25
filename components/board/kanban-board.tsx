@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Eye, EyeOff, Search } from "lucide-react";
+import { CheckSquare, ChevronUp, Eye, EyeOff, Search } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -19,13 +19,24 @@ import {
   STATUS_LABELS,
   TRACKS,
   TRACK_LABELS,
+  NO_RESPONSE_AFTER_DAYS,
   type Status,
 } from "@/lib/constants";
 import type { ApplicationWithSignals } from "@/lib/queries";
 import type { Application } from "@/lib/database.types";
-import { updateApplicationStatus, deleteApplication } from "@/lib/actions/applications";
+import {
+  updateApplicationStatus,
+  updateApplicationsStatus,
+  deleteApplication,
+} from "@/lib/actions/applications";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -72,6 +83,14 @@ export function KanbanBoard({
   const [track, setTrack] = useState<string>("all");
   const [showClosed, setShowClosed] = useState(false);
 
+  // Multi-select. Selecting is on while the Select button is active or while
+  // anything is selected (Ctrl/⌘/Shift-click starts a selection directly).
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const selecting = selectMode || selected.size > 0;
+  // Ids being dragged together when a selected card is picked up.
+  const [dragGroup, setDragGroup] = useState<string[] | null>(null);
+
   // Dialog state for add/edit.
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Application | null>(null);
@@ -79,8 +98,8 @@ export function KanbanBoard({
   // Delete confirmation.
   const [deleting, setDeleting] = useState<ApplicationWithSignals | null>(null);
 
-  // Close-reason prompt when moving to "closed".
-  const [pendingClose, setPendingClose] = useState<ApplicationWithSignals | null>(
+  // Close-reason prompt when moving one or more cards to "closed".
+  const [pendingClose, setPendingClose] = useState<ApplicationWithSignals[] | null>(
     null,
   );
 
@@ -90,6 +109,19 @@ export function KanbanBoard({
     setSyncedFrom(initialApplications);
     setApps(initialApplications);
   }
+
+  // Escape leaves selection mode.
+  useEffect(() => {
+    if (!selecting) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setSelected(new Set());
+        setSelectMode(false);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selecting]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -114,18 +146,51 @@ export function KanbanBoard({
   const byStatus = (status: Status) =>
     filtered.filter((a) => a.status === status);
   const activeApp = apps.find((a) => a.id === activeId) ?? null;
+  // Only cards currently on screen count, so filters can't hide a selection.
+  const selectedApps = filtered.filter(
+    (a) => selected.has(a.id) && visibleStatuses.includes(a.status as Status),
+  );
+
+  function clearSelection() {
+    setSelected(new Set());
+    setSelectMode(false);
+  }
+
+  function toggleSelect(app: ApplicationWithSignals) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(app.id)) next.delete(app.id);
+      else next.add(app.id);
+      return next;
+    });
+  }
+
+  function selectColumn(status: Status) {
+    const ids = byStatus(status).map((a) => a.id);
+    setSelected((prev) => {
+      const allIn = ids.every((id) => prev.has(id));
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (allIn) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
+  }
 
   async function applyMove(
-    app: ApplicationWithSignals,
+    targets: ApplicationWithSignals[],
     status: Status,
     reason?: string | null,
   ) {
-    if (app.status === status) return;
+    const moving = targets.filter((a) => a.status !== status);
+    if (moving.length === 0) return;
+    const ids = new Set(moving.map((a) => a.id));
     const previous = apps;
     // Optimistic update.
     setApps((prev) =>
       prev.map((a) =>
-        a.id === app.id
+        ids.has(a.id)
           ? {
               ...a,
               status,
@@ -135,36 +200,59 @@ export function KanbanBoard({
       ),
     );
 
-    const result = await updateApplicationStatus(app.id, status, reason);
+    const result =
+      moving.length === 1
+        ? await updateApplicationStatus(moving[0].id, status, reason)
+        : await updateApplicationsStatus([...ids], status, reason);
     if (!result.ok) {
       setApps(previous); // revert
       toast.error(result.error);
+    } else if (moving.length > 1) {
+      toast.success(`Moved ${moving.length} applications to ${STATUS_LABELS[status]}`);
     } else if (status === "closed" && !showClosed) {
       // The card just left the visible board; say where it went.
-      toast.success(`${app.company} moved to Closed`);
+      toast.success(`${moving[0].company} moved to Closed`);
     }
   }
 
-  function requestMove(app: ApplicationWithSignals, status: Status) {
+  function requestMove(targets: ApplicationWithSignals[], status: Status) {
+    if (targets.length > 1) clearSelection();
     if (status === "closed") {
-      setPendingClose(app);
+      setPendingClose(targets);
     } else {
-      void applyMove(app, status);
+      void applyMove(targets, status);
     }
   }
 
   function onDragStart(e: DragStartEvent) {
-    setActiveId(String(e.active.id));
+    const id = String(e.active.id);
+    setActiveId(id);
+    // Picking up a selected card carries the whole selection with it.
+    setDragGroup(
+      selected.has(id) && selectedApps.length > 1
+        ? selectedApps.map((a) => a.id)
+        : null,
+    );
   }
 
   function onDragEnd(e: DragEndEvent) {
+    const group = dragGroup;
     setActiveId(null);
+    setDragGroup(null);
     const { active, over } = e;
     if (!over) return;
-    const app = apps.find((a) => a.id === String(active.id));
     const target = String(over.id) as Status;
-    if (!app || !PIPELINE.includes(target) || app.status === target) return;
-    requestMove(app, target);
+    if (!PIPELINE.includes(target)) return;
+    if (group) {
+      requestMove(
+        apps.filter((a) => group.includes(a.id)),
+        target,
+      );
+      return;
+    }
+    const app = apps.find((a) => a.id === String(active.id));
+    if (!app || app.status === target) return;
+    requestMove([app], target);
   }
 
   function openAdd() {
@@ -196,11 +284,34 @@ export function KanbanBoard({
     setTrack("all");
   }
 
-  const cardHandlers = {
-    onEdit: openEdit,
-    onDelete: (app: ApplicationWithSignals) => setDeleting(app),
-    onMove: requestMove,
-  };
+  function renderCard(app: ApplicationWithSignals) {
+    return (
+      <ApplicationCard
+        key={app.id}
+        app={app}
+        onEdit={openEdit}
+        onDelete={setDeleting}
+        onMove={(a, s) => requestMove([a], s)}
+        selecting={selecting}
+        selected={selected.has(app.id)}
+        onToggleSelect={toggleSelect}
+        dimmed={Boolean(dragGroup?.includes(app.id)) && app.id !== activeId}
+      />
+    );
+  }
+
+  function columnSelectAction(status: Status) {
+    if (!selecting || byStatus(status).length === 0) return undefined;
+    return (
+      <button
+        type="button"
+        onClick={() => selectColumn(status)}
+        className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
+      >
+        All
+      </button>
+    );
+  }
 
   const isEmpty = apps.length === 0;
   const noMatches = !isEmpty && filtered.length === 0;
@@ -245,15 +356,27 @@ export function KanbanBoard({
                 </button>
               ))}
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="ml-auto text-muted-foreground"
-              onClick={() => setShowClosed((v) => !v)}
-            >
-              {showClosed ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-              {showClosed ? "Hide closed" : `Show closed (${closedCount})`}
-            </Button>
+            <div className="ml-auto flex items-center gap-1">
+              <Button
+                variant={selecting ? "secondary" : "ghost"}
+                size="sm"
+                className={cn(!selecting && "text-muted-foreground")}
+                onClick={() => (selecting ? clearSelection() : setSelectMode(true))}
+                title="Select several cards to move them together. Tip: Ctrl/⌘-click a card."
+              >
+                <CheckSquare className="size-4" />
+                {selecting ? "Done" : "Select"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => setShowClosed((v) => !v)}
+              >
+                {showClosed ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                {showClosed ? "Hide closed" : `Show closed (${closedCount})`}
+              </Button>
+            </div>
           </div>
 
           {noMatches ? (
@@ -273,15 +396,19 @@ export function KanbanBoard({
               collisionDetection={closestCorners}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
+              onDragCancel={() => {
+                setActiveId(null);
+                setDragGroup(null);
+              }}
             >
               {isDesktop ? (
                 <div className="overflow-x-auto pb-2">
                   <div
                     className={cn(
-                      "grid gap-3",
+                      "grid gap-2.5",
                       showClosed
-                        ? "min-w-[62rem] grid-cols-6"
-                        : "min-w-[52rem] grid-cols-5",
+                        ? "min-w-[63rem] grid-cols-7"
+                        : "min-w-[54rem] grid-cols-6",
                     )}
                   >
                     {visibleStatuses.map((status) => {
@@ -292,10 +419,9 @@ export function KanbanBoard({
                           status={status}
                           count={items.length}
                           empty={items.length === 0}
+                          headerAction={columnSelectAction(status)}
                         >
-                          {items.map((app) => (
-                            <ApplicationCard key={app.id} app={app} {...cardHandlers} />
-                          ))}
+                          {items.map(renderCard)}
                         </Column>
                       );
                     })}
@@ -327,20 +453,67 @@ export function KanbanBoard({
                     status={currentMobileStatus}
                     count={byStatus(currentMobileStatus).length}
                     empty={byStatus(currentMobileStatus).length === 0}
+                    headerAction={columnSelectAction(currentMobileStatus)}
                   >
-                    {byStatus(currentMobileStatus).map((app) => (
-                      <ApplicationCard key={app.id} app={app} {...cardHandlers} />
-                    ))}
+                    {byStatus(currentMobileStatus).map(renderCard)}
                   </Column>
                 </div>
               )}
 
               <DragOverlay>
-                {activeApp ? <ApplicationCard app={activeApp} overlay /> : null}
+                {activeApp ? (
+                  <div className="relative">
+                    <ApplicationCard app={activeApp} overlay />
+                    {dragGroup && (
+                      <span className="absolute -right-2 -top-2 grid size-6 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground shadow">
+                        {dragGroup.length}
+                      </span>
+                    )}
+                  </div>
+                ) : null}
               </DragOverlay>
             </DndContext>
           )}
+
+          {byStatus("no_response").length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Applications with no reply {NO_RESPONSE_AFTER_DAYS} days after
+              applying move to No response automatically. Drag one back if
+              you hear from them.
+            </p>
+          )}
         </>
+      )}
+
+      {/* Bulk actions for the current selection */}
+      {selectedApps.length > 0 && (
+        <div className="fixed inset-x-0 bottom-20 z-40 flex justify-center px-4 md:bottom-6">
+          <div className="flex items-center gap-2 rounded-xl border bg-popover py-1.5 pl-4 pr-1.5 text-popover-foreground shadow-lg">
+            <span className="text-sm font-medium">
+              {selectedApps.length} selected
+            </span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm">
+                  Move to <ChevronUp className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="center">
+                {PIPELINE.map((s) => (
+                  <DropdownMenuItem
+                    key={s}
+                    onClick={() => requestMove(selectedApps, s)}
+                  >
+                    {STATUS_LABELS[s]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button size="sm" variant="ghost" onClick={clearSelection}>
+              Cancel
+            </Button>
+          </div>
+        </div>
       )}
 
       <ApplicationDialog
@@ -351,9 +524,15 @@ export function KanbanBoard({
 
       {/* key resets the chosen reason for each new prompt */}
       <CloseReasonDialog
-        key={pendingClose?.id ?? "none"}
+        key={pendingClose?.map((a) => a.id).join(",") ?? "none"}
         open={Boolean(pendingClose)}
-        company={pendingClose?.company ?? null}
+        company={
+          pendingClose
+            ? pendingClose.length === 1
+              ? pendingClose[0].company
+              : `${pendingClose.length} applications`
+            : null
+        }
         onCancel={() => setPendingClose(null)}
         onConfirm={(reason) => {
           if (pendingClose) void applyMove(pendingClose, "closed", reason);

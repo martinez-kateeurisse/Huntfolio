@@ -1,6 +1,8 @@
 // Pure "needs attention" nudge computation. Takes plain rows (no I/O) so it's
 // easy to reason about and test. The home view renders whatever this returns.
 
+import { INACTIVE_STATUSES, type Status } from "@/lib/constants";
+
 export const FOLLOW_UP_DAYS = 7;
 export const STALE_DAYS = 14;
 export const INTERVIEW_SOON_DAYS = 3;
@@ -140,7 +142,7 @@ export function computeReminders(
   // 4. Stale: open app with no status change in > STALE_DAYS (and not already a
   //    follow-up nudge, which is the more actionable signal).
   for (const app of apps) {
-    if (app.status === "closed") continue;
+    if (INACTIVE_STATUSES.includes(app.status as Status)) continue;
     if (flagged.has(app.id)) continue;
     const last = lastChange.get(app.id);
     if (!last) continue;
