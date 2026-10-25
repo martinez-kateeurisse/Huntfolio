@@ -38,6 +38,11 @@ The app is organized into five areas: **Today**, **Applications**,
 - **Interview prep** — research notes, a reusable question bank, and STAR stories.
 - **Analytics** — a funnel with stage-to-stage conversion, traction by track,
   response rate by source, average time-in-stage, and applications over time.
+- **Gmail sync** *(optional)* — a small Google Apps Script in your own account
+  checks for job emails every hour. Keyword rules (no AI) turn confirmations,
+  interview invites, rejections and offers into new applications, status
+  changes and interviews, logged on Today. Only matching emails are sent, and
+  only sender, subject, date and a short excerpt are kept.
 - **AI resume tailoring** *(optional)* — sends a job description and one of your
   resumes to a model via OpenRouter (server-side) and returns tailoring
   guidance, saved to your prep notes.
@@ -78,6 +83,8 @@ In the Supabase **SQL Editor**, run the migrations in order:
 1. `supabase/migrations/0001_init.sql` — tables, RLS policies, and triggers.
 2. `supabase/migrations/0002_storage.sql` — the private `documents` bucket and
    its access policies.
+3. `supabase/migrations/0003_inbox.sql` — tables for Gmail sync (optional; the
+   rest of the app works without it).
 
 ### 3. Enable auth
 

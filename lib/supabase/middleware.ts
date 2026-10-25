@@ -4,7 +4,8 @@ import type { Database } from "@/lib/database.types";
 
 // Refreshes the Supabase session on every request and guards the app routes.
 // Unauthenticated users are redirected to /login; the login page, the auth
-// callback, and the keep-alive health check stay public.
+// callback, the keep-alive health check, and the Gmail script's endpoint
+// (which checks its own secret) stay public.
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -38,7 +39,8 @@ export async function updateSession(request: NextRequest) {
   const isPublic =
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
-    pathname.startsWith("/api/health");
+    pathname.startsWith("/api/health") ||
+    pathname.startsWith("/api/inbox");
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

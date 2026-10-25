@@ -16,6 +16,7 @@ import type {
   Document,
   PrepNote,
   Contact,
+  InboxEvent,
 } from "@/lib/database.types";
 import {
   IS_DEMO,
@@ -42,6 +43,7 @@ import {
   type HistoryRow,
 } from "@/lib/analytics";
 import { computeReminders, type Nudge } from "@/lib/reminders";
+import { applyInboxEvents } from "@/lib/inbox/apply";
 
 // A board card needs the application plus one contextual signal.
 export type ApplicationWithSignals = Application & {
@@ -128,11 +130,95 @@ const sweepNoResponse = cache(async () => {
   }
 });
 
+// Emails reported by the Gmail script are applied in small batches before
+// pages render, so a normal load only pays for one quick "anything new?"
+// check, at most every couple of minutes. A backlog (e.g. the first 30-day
+// import) keeps draining on each load, or all at once via "Add now".
+const INBOX_BATCH = 8;
+const INBOX_CHECK_EVERY_MS = 2 * 60 * 1000;
+const lastInboxCheckAt = new Map<string, number>();
+
+async function applyInbox() {
+  if (IS_DEMO) return;
+  const { supabase, userId } = await requireUserId();
+  if (Date.now() - (lastInboxCheckAt.get(userId) ?? 0) < INBOX_CHECK_EVERY_MS) {
+    return;
+  }
+  try {
+    const { remaining } = await applyInboxEvents(supabase, userId, INBOX_BATCH);
+    if (remaining === 0) lastInboxCheckAt.set(userId, Date.now());
+  } catch (e) {
+    // Most likely the inbox migration hasn't been run yet. Never block a page.
+    lastInboxCheckAt.set(userId, Date.now());
+    console.error("Inbox sync failed:", e);
+  }
+}
+
+// Upkeep that must happen before statuses are read: new emails first (an
+// interview invite should win over "no response"), then the no-response sweep.
+const runAutomations = cache(async () => {
+  await applyInbox();
+  await sweepNoResponse();
+});
+
+export type InboxStatus = {
+  available: boolean; // false in demo mode or before the inbox migration
+  connected: boolean;
+  lastSeenAt: string | null;
+  pending: number;
+  recent: InboxEvent[];
+};
+
+// The Gmail connection and what it recently changed, for the Today page.
+export async function getInboxStatus(): Promise<InboxStatus> {
+  const unavailable = {
+    available: false,
+    connected: false,
+    lastSeenAt: null,
+    pending: 0,
+    recent: [],
+  };
+  if (IS_DEMO) return unavailable;
+  await runAutomations();
+  const { supabase } = await requireUserId();
+
+  const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
+  const [conn, recent, pending] = await Promise.all([
+    supabase.from("inbox_connections").select("last_seen_at").maybeSingle(),
+    supabase
+      .from("inbox_events")
+      .select("*")
+      .neq("status", "pending")
+      .gte("received_at", since)
+      .order("received_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("inbox_events")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending"),
+  ]);
+  // Before the inbox migration runs, show the feature as unavailable rather
+  // than failing the whole Today page.
+  if (conn.error || recent.error || pending.error) return unavailable;
+
+  return {
+    available: true,
+    connected: Boolean(conn.data),
+    lastSeenAt: conn.data?.last_seen_at ?? null,
+    pending: pending.count ?? 0,
+    // What changed, plus emails it couldn't place (so you can add them by
+    // hand) — not the "already up to date" repeats.
+    recent: (recent.data ?? [])
+      .filter((ev) => ev.status === "done" || !ev.application_id)
+      .slice(0, 6),
+  };
+}
+
 // All applications with their board signals (next task due, next interview).
 export async function getApplicationsWithSignals(): Promise<
   ApplicationWithSignals[]
 > {
-  await sweepNoResponse();
+  await runAutomations();
   if (IS_DEMO) return demoGetApplicationsWithSignals();
   const { supabase } = await requireUserId();
 
@@ -184,7 +270,7 @@ export async function getApplicationsWithSignals(): Promise<
 
 // Flat list of applications (for the table view).
 export async function getApplications(): Promise<Application[]> {
-  await sweepNoResponse();
+  await runAutomations();
   if (IS_DEMO) return demoGetApplications();
   const { supabase } = await requireUserId();
   const res = await supabase
@@ -198,7 +284,7 @@ export async function getApplications(): Promise<Application[]> {
 export async function getApplicationDetail(
   id: string,
 ): Promise<ApplicationDetail | null> {
-  await sweepNoResponse();
+  await runAutomations();
   if (IS_DEMO) return demoGetApplicationDetail(id);
   const { supabase } = await requireUserId();
 
@@ -430,7 +516,7 @@ export async function getCalendarEvents(
 export async function getAnalytics(
   filters: AnalyticsFilters,
 ): Promise<AnalyticsData> {
-  await sweepNoResponse();
+  await runAutomations();
   if (IS_DEMO) {
     const { apps, history } = demoGetAnalyticsRaw();
     return computeAnalytics(apps, history, filters);
@@ -456,7 +542,7 @@ export async function getAnalytics(
 }
 
 export async function getReminders(): Promise<Nudge[]> {
-  await sweepNoResponse();
+  await runAutomations();
   if (IS_DEMO) {
     const raw = demoGetReminderRaw();
     return computeReminders(raw);
@@ -484,7 +570,7 @@ export async function getReminders(): Promise<Nudge[]> {
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  await sweepNoResponse();
+  await runAutomations();
   if (IS_DEMO) return demoGetDashboardStats();
   const { supabase } = await requireUserId();
 

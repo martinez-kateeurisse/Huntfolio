@@ -11,6 +11,7 @@ import { ArrowRight, CalendarClock, ListChecks, Rocket } from "lucide-react";
 import {
   getCalendarEvents,
   getDashboardStats,
+  getInboxStatus,
   getReminders,
   getTasks,
 } from "@/lib/queries";
@@ -21,6 +22,7 @@ import { NeedsAttentionPanel } from "@/components/reminders/needs-attention-pane
 import { AddApplicationButton } from "@/components/applications/add-application-button";
 import { TaskItem } from "@/components/tasks/task-item";
 import { EmptyState } from "@/components/empty-state";
+import { InboxPanel } from "@/components/inbox/inbox-panel";
 
 export const metadata = { title: "Today · Huntfolio" };
 
@@ -67,7 +69,7 @@ function dayLabel(date: Date) {
 
 export default async function TodayPage() {
   const now = new Date();
-  const [stats, nudges, tasks, events] = await Promise.all([
+  const [stats, nudges, tasks, events, inbox] = await Promise.all([
     getDashboardStats(),
     getReminders(),
     getTasks(),
@@ -75,6 +77,7 @@ export default async function TodayPage() {
       startOfDay(now).toISOString(),
       addDays(now, INTERVIEW_HORIZON_DAYS).toISOString(),
     ),
+    getInboxStatus(),
   ]);
 
   const isFirstRun = stats.total === 0;
@@ -96,6 +99,9 @@ export default async function TodayPage() {
           description="Add a role you're eyeing or have applied to. Huntfolio will remind you to follow up, keep interviews on your calendar, and show how your search is going."
           action={<AddApplicationButton label="Add your first application" />}
         />
+        <div className="max-w-md">
+          <InboxPanel status={inbox} />
+        </div>
       </div>
     );
   }
@@ -153,53 +159,56 @@ export default async function TodayPage() {
           />
         </div>
 
-        <Panel
-          title="Upcoming interviews"
-          icon={<CalendarClock className="size-4" />}
-          href="/calendar"
-          linkLabel="Calendar"
-        >
-          {interviews.length === 0 ? (
-            <p className="py-2 text-sm text-muted-foreground">
-              No interviews in the next two weeks.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-1">
-              {interviews.map((e) => {
-                const date = new Date(e.date);
-                const type = e.interview?.type
-                  ? INTERVIEW_TYPE_LABELS[e.interview.type as InterviewType]
-                  : "Interview";
-                return (
-                  <li key={e.id}>
-                    <Link
-                      href={`/applications/${e.applicationId}?tab=interviews`}
-                      className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/60"
-                    >
-                      <div className="grid w-11 shrink-0 place-items-center rounded-md bg-muted py-1 text-center">
-                        <span className="text-[10px] font-medium uppercase text-muted-foreground">
-                          {format(date, "MMM")}
-                        </span>
-                        <span className="text-base font-semibold leading-none">
-                          {format(date, "d")}
-                        </span>
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {e.company ?? "Interview"}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {type} · {dayLabel(date)},{" "}
-                          {format(date, "h:mma").toLowerCase()}
-                        </p>
-                      </div>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Panel>
+        <div className="flex flex-col gap-6">
+          <Panel
+            title="Upcoming interviews"
+            icon={<CalendarClock className="size-4" />}
+            href="/calendar"
+            linkLabel="Calendar"
+          >
+            {interviews.length === 0 ? (
+              <p className="py-2 text-sm text-muted-foreground">
+                No interviews in the next two weeks.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {interviews.map((e) => {
+                  const date = new Date(e.date);
+                  const type = e.interview?.type
+                    ? INTERVIEW_TYPE_LABELS[e.interview.type as InterviewType]
+                    : "Interview";
+                  return (
+                    <li key={e.id}>
+                      <Link
+                        href={`/applications/${e.applicationId}?tab=interviews`}
+                        className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/60"
+                      >
+                        <div className="grid w-11 shrink-0 place-items-center rounded-md bg-muted py-1 text-center">
+                          <span className="text-[10px] font-medium uppercase text-muted-foreground">
+                            {format(date, "MMM")}
+                          </span>
+                          <span className="text-base font-semibold leading-none">
+                            {format(date, "d")}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {e.company ?? "Interview"}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {type} · {dayLabel(date)},{" "}
+                            {format(date, "h:mma").toLowerCase()}
+                          </p>
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Panel>
+          <InboxPanel status={inbox} />
+        </div>
       </div>
     </div>
   );

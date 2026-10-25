@@ -1,7 +1,8 @@
 // Types for the Huntfolio database.
 //
-// These mirror the schema in supabase/migrations/0001_init.sql. They follow the
-// shape that `supabase gen types typescript` produces, so once you have a live
+// These mirror the schema in supabase/migrations/ (0001_init.sql and
+// 0003_inbox.sql). They follow the shape that `supabase gen types typescript`
+// produces, so once you have a live
 // project you can regenerate this file to stay in sync:
 //
 //   npx supabase gen types typescript --project-id <ref> --schema public \
@@ -236,9 +237,72 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["contacts"]["Insert"]>;
         Relationships: [];
       };
+      inbox_connections: {
+        Row: {
+          user_id: string;
+          token_hash: string;
+          created_at: Timestamp | null;
+          last_seen_at: Timestamp | null;
+        };
+        Insert: {
+          user_id: string;
+          token_hash: string;
+          created_at?: Timestamp | null;
+          last_seen_at?: Timestamp | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["inbox_connections"]["Insert"]>;
+        Relationships: [];
+      };
+      inbox_events: {
+        Row: {
+          id: string;
+          user_id: string;
+          message_id: string;
+          received_at: Timestamp;
+          from_name: string | null;
+          from_email: string | null;
+          subject: string | null;
+          snippet: string | null;
+          kind: string;
+          company: string | null;
+          role_title: string | null;
+          interview_at: Timestamp | null;
+          interview_type: string | null;
+          status: string;
+          application_id: string | null;
+          result: string | null;
+          created_at: Timestamp | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          message_id: string;
+          received_at: Timestamp;
+          from_name?: string | null;
+          from_email?: string | null;
+          subject?: string | null;
+          snippet?: string | null;
+          kind: string;
+          company?: string | null;
+          role_title?: string | null;
+          interview_at?: Timestamp | null;
+          interview_type?: string | null;
+          status?: string;
+          application_id?: string | null;
+          result?: string | null;
+          created_at?: Timestamp | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["inbox_events"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<never, never>;
-    Functions: Record<never, never>;
+    Functions: {
+      inbox_ingest: {
+        Args: { p_token: string; p_events: Json };
+        Returns: number;
+      };
+    };
     Enums: Record<never, never>;
     CompositeTypes: Record<never, never>;
   };
@@ -269,3 +333,4 @@ export type PrepNoteInsert =
 export type Contact = Database["public"]["Tables"]["contacts"]["Row"];
 export type ContactInsert =
   Database["public"]["Tables"]["contacts"]["Insert"];
+export type InboxEvent = Database["public"]["Tables"]["inbox_events"]["Row"];
