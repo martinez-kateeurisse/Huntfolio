@@ -324,7 +324,7 @@ function seed(): DemoState {
     {
       id: "demo-doc1",
       user_id: DEMO_USER,
-      name: "Kate Martinez — Resume",
+      name: "Alex Rivera — Resume",
       type: "resume",
       version_label: "v3 — QA-focused",
       file_url: "demo/resume-qa.pdf",
@@ -334,7 +334,7 @@ function seed(): DemoState {
     {
       id: "demo-doc2",
       user_id: DEMO_USER,
-      name: "Kate Martinez — Resume",
+      name: "Alex Rivera — Resume",
       type: "resume",
       version_label: "v2 — Dev-focused",
       file_url: "demo/resume-dev.pdf",

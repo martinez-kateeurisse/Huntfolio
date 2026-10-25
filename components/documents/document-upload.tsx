@@ -167,7 +167,7 @@ export function DocumentUpload() {
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Kate Martinez — Resume"
+              placeholder="e.g. Your Name — Resume"
             />
           </div>
 

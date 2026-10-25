@@ -53,3 +53,6 @@ AGENTS.md
 supabase/.temp/
 supabase/.branches/
 *.log
+
+# private notes: kept on this computer, never pushed
+/private/
