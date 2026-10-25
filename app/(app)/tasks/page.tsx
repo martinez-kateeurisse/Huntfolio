@@ -2,6 +2,8 @@ import { differenceInCalendarDays } from "date-fns";
 import { getTasks, getApplications } from "@/lib/queries";
 import { hasDueTime } from "@/lib/format";
 import type { TaskWithApplication } from "@/lib/queries";
+import { SCHEDULE_TABS } from "@/lib/navigation";
+import { PageHeader } from "@/components/page-header";
 import { QuickAddTask } from "@/components/tasks/quick-add-task";
 import { TaskItem } from "@/components/tasks/task-item";
 import { EmptyState } from "@/components/empty-state";
@@ -50,66 +52,74 @@ export default async function TasksPage() {
   const hasAny = tasks.length > 0;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Tasks</h1>
-        {open.length > 0 && (
-          <span className="text-sm text-muted-foreground">
-            {open.length} open
-          </span>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Schedule"
+        description={
+          open.length > 0
+            ? `${open.length} open ${open.length === 1 ? "task" : "tasks"}, grouped by when they're due.`
+            : "Follow-ups and to-dos, grouped by when they're due."
+        }
+        tabs={SCHEDULE_TABS}
+      />
+
+      <div className="flex max-w-3xl flex-col gap-6">
+        <QuickAddTask applications={appOptions} />
+
+        {!hasAny ? (
+          <EmptyState
+            title="No tasks yet"
+            description="Add follow-ups, prep reminders, or anything else you don't want to forget. Tasks can stand alone or link to an application."
+          />
+        ) : (
+          <div className="flex flex-col gap-6">
+            {BUCKET_ORDER.map(({ key, label }) => {
+              const items = grouped.get(key);
+              if (!items || items.length === 0) return null;
+              return (
+                <section key={key} className="flex flex-col gap-2">
+                  <h2
+                    className={
+                      key === "overdue"
+                        ? "text-sm font-medium text-destructive"
+                        : "text-sm font-medium text-muted-foreground"
+                    }
+                  >
+                    {label}
+                    <span className="ml-1.5 opacity-70">{items.length}</span>
+                  </h2>
+                  {items.map((t) => (
+                    <TaskItem key={t.id} task={t} showApplication />
+                  ))}
+                </section>
+              );
+            })}
+
+            {open.length === 0 && done.length > 0 && (
+              <p className="text-center text-sm text-muted-foreground">
+                🎉 All caught up — no open tasks.
+              </p>
+            )}
+
+            {/* Completed tasks only pile up; keep them out of the way. */}
+            {done.length > 0 && (
+              <details className="group flex flex-col gap-2">
+                <summary className="cursor-pointer list-none text-sm font-medium text-muted-foreground hover:text-foreground">
+                  <span className="group-open:hidden">Show</span>
+                  <span className="hidden group-open:inline">Hide</span>{" "}
+                  completed
+                  <span className="ml-1.5 opacity-70">{done.length}</span>
+                </summary>
+                <div className="mt-2 flex flex-col gap-2">
+                  {done.map((t) => (
+                    <TaskItem key={t.id} task={t} showApplication />
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
         )}
       </div>
-
-      <QuickAddTask applications={appOptions} />
-
-      {!hasAny ? (
-        <EmptyState
-          title="No tasks yet"
-          description="Add follow-ups, prep reminders, or anything else you don't want to forget. Tasks can stand alone or link to an application."
-        />
-      ) : (
-        <div className="flex flex-col gap-6">
-          {BUCKET_ORDER.map(({ key, label }) => {
-            const items = grouped.get(key);
-            if (!items || items.length === 0) return null;
-            return (
-              <section key={key} className="flex flex-col gap-2">
-                <h2
-                  className={
-                    key === "overdue"
-                      ? "text-sm font-medium text-destructive"
-                      : "text-sm font-medium text-muted-foreground"
-                  }
-                >
-                  {label}
-                  <span className="ml-1.5 opacity-70">{items.length}</span>
-                </h2>
-                {items.map((t) => (
-                  <TaskItem key={t.id} task={t} showApplication />
-                ))}
-              </section>
-            );
-          })}
-
-          {done.length > 0 && (
-            <section className="flex flex-col gap-2">
-              <h2 className="text-sm font-medium text-muted-foreground">
-                Completed
-                <span className="ml-1.5 opacity-70">{done.length}</span>
-              </h2>
-              {done.map((t) => (
-                <TaskItem key={t.id} task={t} showApplication />
-              ))}
-            </section>
-          )}
-
-          {open.length === 0 && done.length > 0 && (
-            <p className="text-center text-sm text-muted-foreground">
-              🎉 All caught up — no open tasks.
-            </p>
-          )}
-        </div>
-      )}
     </div>
   );
 }

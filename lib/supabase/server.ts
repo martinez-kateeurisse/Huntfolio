@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/lib/database.types";
@@ -29,3 +30,14 @@ export async function createClient() {
     },
   );
 }
+
+// The signed-in user for the current request. Cached per request so the
+// layout and every query on a page share one Auth round-trip instead of each
+// making their own.
+export const getSessionUser = cache(async () => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return { supabase, user };
+});

@@ -8,7 +8,10 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type");
-  const next = searchParams.get("next") ?? "/applications";
+  // Only same-site paths, so the link can't bounce the user elsewhere.
+  const nextParam = searchParams.get("next") ?? "/";
+  const next =
+    nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/";
 
   const supabase = await createClient();
 
@@ -23,5 +26,7 @@ export async function GET(request: NextRequest) {
     if (!error) return NextResponse.redirect(`${origin}${next}`);
   }
 
-  return NextResponse.redirect(`${origin}/login?error=auth`);
+  // Supabase appends error_code (e.g. otp_expired) when the link itself is bad.
+  const reason = searchParams.get("error_code") === "otp_expired" ? "expired" : "auth";
+  return NextResponse.redirect(`${origin}/login?error=${reason}`);
 }

@@ -12,6 +12,8 @@ import { ContactForm } from "@/components/contacts/contact-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
+import { LIBRARY_TABS } from "@/lib/navigation";
 import {
   Dialog,
   DialogContent,
@@ -93,12 +95,16 @@ export function ContactList({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold">Contacts</h1>
-        <Button size="sm" onClick={openAdd}>
-          <Plus className="size-4" /> Add contact
-        </Button>
-      </div>
+      <PageHeader
+        title="Library"
+        description="Recruiters, referrers, and everyone you've talked to."
+        actions={
+          <Button size="sm" onClick={openAdd}>
+            <Plus className="size-4" /> Add contact
+          </Button>
+        }
+        tabs={LIBRARY_TABS}
+      />
 
       {contacts.length === 0 ? (
         <EmptyState

@@ -96,7 +96,7 @@ export function PrepSection({
               href="/prep"
               className="text-xs text-muted-foreground hover:text-foreground hover:underline"
             >
-              Manage in Prep
+              Manage in Library
             </Link>
           </div>
           <div className="grid grid-cols-1 gap-2">

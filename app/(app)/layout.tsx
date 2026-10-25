@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/supabase/server";
 import { IS_DEMO } from "@/lib/demo";
-import { Nav } from "@/components/nav";
+import { Nav, MobileNav } from "@/components/nav";
 
 export default async function AppLayout({
   children,
@@ -11,10 +11,7 @@ export default async function AppLayout({
   let email: string | null = "demo@huntfolio.app";
 
   if (!IS_DEMO) {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { user } = await getSessionUser();
 
     // Middleware already guards these routes, but double-check server-side.
     if (!user) redirect("/login");
@@ -30,9 +27,11 @@ export default async function AppLayout({
         </div>
       )}
       <Nav email={email} />
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
+      {/* Bottom padding on mobile clears the fixed bottom tab bar. */}
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-6 pb-24 sm:px-6 md:pb-10">
         {children}
       </main>
+      <MobileNav />
     </div>
   );
 }

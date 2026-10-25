@@ -56,6 +56,7 @@ function toPayload(
 }
 
 function revalidateAll(id?: string) {
+  revalidatePath("/");
   revalidatePath("/applications");
   revalidatePath("/applications/table");
   revalidatePath("/tasks");

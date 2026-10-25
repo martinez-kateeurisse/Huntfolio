@@ -25,25 +25,42 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+// Pass `open` + `onOpenChange` to control it from elsewhere (e.g. a menu item);
+// otherwise it renders its own trigger button.
 export function TailorPanel({
   applicationId,
   company,
   roleTitle,
   defaultJobDescription,
   documents,
+  open: openProp,
+  onOpenChange,
 }: {
   applicationId: string;
   company: string;
   roleTitle: string;
   defaultJobDescription: string;
   documents: Document[];
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const controlled = openProp !== undefined;
+  const open = controlled ? openProp : openState;
+  const setOpen = controlled ? (onOpenChange ?? (() => {})) : setOpenState;
+  // Resumes first (the library sorts cover letters ahead of them), and the
+  // default resume preselected.
+  const ordered = [
+    ...documents.filter((d) => d.type === "resume"),
+    ...documents.filter((d) => d.type !== "resume"),
+  ];
+  const preferred =
+    ordered.find((d) => d.type === "resume" && d.is_default) ?? ordered[0];
   const [jd, setJd] = useState(defaultJobDescription);
   const [mode, setMode] = useState<"library" | "paste">(
     documents.length > 0 ? "library" : "paste",
   );
-  const [docId, setDocId] = useState(documents[0]?.id ?? "");
+  const [docId, setDocId] = useState(preferred?.id ?? "");
   const [pasted, setPasted] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<TailorResult | null>(null);
@@ -74,19 +91,21 @@ export function TailorPanel({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Sparkles className="size-4" /> Tailor to this job
-        </Button>
-      </DialogTrigger>
+      {!controlled && (
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            <Sparkles className="size-4" /> Tailor to this job
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="size-4" /> Tailor resume
           </DialogTitle>
           <DialogDescription>
-            Claude compares your resume to this job and suggests how to tailor
-            it. Suggestions are drafts to review — not to paste blindly.
+            AI compares your resume to this job and suggests how to tailor it.
+            Suggestions are drafts to review — not to paste blindly.
           </DialogDescription>
         </DialogHeader>
 
@@ -127,7 +146,7 @@ export function TailorPanel({
                   <SelectValue placeholder="Choose a resume" />
                 </SelectTrigger>
                 <SelectContent>
-                  {documents.map((d) => (
+                  {ordered.map((d) => (
                     <SelectItem key={d.id} value={d.id}>
                       {d.name}
                       {d.version_label ? ` · ${d.version_label}` : ""}
@@ -172,6 +191,7 @@ function ModeButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         "rounded-md px-2.5 py-1",

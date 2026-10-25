@@ -127,7 +127,9 @@ export function ApplicationCard({
             onPointerDown={(e) => e.stopPropagation()}
           >
             <button
-              className="-mr-1 -mt-1 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100 focus:opacity-100"
+              // Hover-revealed on desktop; always visible on touch screens,
+              // which have no hover to reveal it.
+              className="-mr-1 -mt-1 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
               aria-label="Card actions"
             >
               <MoreHorizontal className="size-4" />

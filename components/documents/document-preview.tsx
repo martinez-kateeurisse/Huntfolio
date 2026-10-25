@@ -35,27 +35,38 @@ export function DocumentPreviewDialog({
 }) {
   const ext = extensionOf(doc);
   const canInline = ext === "pdf";
-  const [url, setUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // null = not fetched yet for this opening. Cleared on close so every open
+  // gets a fresh signed URL (they expire).
+  const [preview, setPreview] = useState<{
+    url: string | null;
+    error: string | null;
+  } | null>(null);
   const [isDownloading, startDownload] = useTransition();
+  const loading = open && canInline && preview === null;
+  const url = preview?.url ?? null;
+  const error = preview?.error ?? null;
 
   useEffect(() => {
-    if (!open || !canInline) return;
+    if (!open || !canInline || preview) return;
     let active = true;
-    setLoading(true);
-    setError(null);
-    setUrl(null);
     getDocumentPreviewUrl(doc.id).then((result) => {
       if (!active) return;
-      if (result.ok && result.data) setUrl(result.data.url);
-      else setError(result.ok ? "No preview available." : result.error);
-      setLoading(false);
+      if (result.ok && result.data) setPreview({ url: result.data.url, error: null });
+      else
+        setPreview({
+          url: null,
+          error: result.ok ? "No preview available." : result.error,
+        });
     });
     return () => {
       active = false;
     };
-  }, [open, canInline, doc.id]);
+  }, [open, canInline, doc.id, preview]);
+
+  function handleOpenChange(next: boolean) {
+    if (!next) setPreview(null);
+    onOpenChange(next);
+  }
 
   function download() {
     startDownload(async () => {
@@ -66,7 +77,7 @@ export function DocumentPreviewDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="flex max-h-[90vh] flex-col gap-4 sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="truncate">{doc.name}</DialogTitle>

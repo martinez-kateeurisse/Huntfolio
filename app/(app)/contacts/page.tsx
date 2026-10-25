@@ -11,7 +11,7 @@ export default async function ContactsPage() {
   const appOptions = applications.map((a) => ({ id: a.id, company: a.company }));
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
+    <div className="max-w-4xl">
       <ContactList contacts={contacts} applications={appOptions} />
     </div>
   );

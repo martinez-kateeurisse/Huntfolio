@@ -25,6 +25,7 @@ function nullify(v: string | undefined | null): string | null {
 }
 
 function revalidate(applicationId: string) {
+  revalidatePath("/");
   revalidatePath(`/applications/${applicationId}`);
   revalidatePath("/applications");
   revalidatePath("/calendar");

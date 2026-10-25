@@ -21,7 +21,9 @@ async function requireUser() {
 }
 
 function revalidateTasks(applicationId?: string | null) {
+  revalidatePath("/");
   revalidatePath("/tasks");
+  revalidatePath("/calendar");
   revalidatePath("/applications");
   if (applicationId) revalidatePath(`/applications/${applicationId}`);
 }

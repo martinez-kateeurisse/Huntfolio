@@ -681,6 +681,7 @@ export function demoGetDashboardStats(): DashboardStats {
     appliedCount,
     appliedThisWeek,
     tasksDueSoon,
+    total: s.applications.length,
   };
 }
 

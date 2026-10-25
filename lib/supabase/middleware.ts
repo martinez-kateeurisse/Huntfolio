@@ -3,8 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
 
 // Refreshes the Supabase session on every request and guards the app routes.
-// Unauthenticated users are redirected to /login; the login page and the auth
-// callback stay public.
+// Unauthenticated users are redirected to /login; the login page, the auth
+// callback, and the keep-alive health check stay public.
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -36,17 +36,21 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isPublic =
-    pathname.startsWith("/login") || pathname.startsWith("/auth");
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/api/health");
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
   if (user && pathname.startsWith("/login")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/applications";
+    url.pathname = "/";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 

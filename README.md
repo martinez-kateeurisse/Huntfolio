@@ -1,4 +1,4 @@
-P# Huntfolio
+# Huntfolio
 
 A personal job-search tracker. Organize applications, move them through a
 pipeline, track follow-ups and interviews, and see your momentum at a glance.
@@ -9,15 +9,22 @@ enough to deploy publicly.
 
 ## Features
 
+The app is organized into five areas: **Today**, **Applications**,
+**Schedule**, **Library**, and **Insights**.
+
+- **Today** — the home page: tasks due in the next few days, people to follow
+  up with, upcoming interviews, and three headline stats.
 - **Pipeline board** — Kanban across `Saved → Applied → Screening → Interview →
   Offer → Closed`, with drag-and-drop that persists status (and prompts for a
-  reason when you close an application). Cards surface a contextual signal —
-  days since applied, next task due, or an upcoming interview.
+  reason when you close an application). Search, filter by track, and keep
+  Closed applications out of the way until you want them. Cards surface a
+  contextual signal — days since applied, next task due, or an upcoming
+  interview.
 - **Table view** — the same applications, sortable and filterable by track,
   status, and source.
-- **Application detail** — every field plus inline tasks, interviews, attached
-  document versions, contacts, prep notes, and an auto-logged status-history
-  timeline.
+- **Application detail** — change status inline, then four tabs: Overview
+  (tasks + details), Interviews & prep, Docs & contacts, and an auto-logged
+  status History.
 - **Tasks & reminders** — to-dos grouped by due date, and a computed
   "Needs attention" panel (follow-ups, stale applications, interviews soon,
   overdue tasks) with one-click actions.
@@ -29,10 +36,10 @@ enough to deploy publicly.
 - **Analytics** — a funnel with stage-to-stage conversion, traction by track,
   response rate by source, average time-in-stage, and applications over time.
 - **AI resume tailoring** *(optional)* — sends a job description and one of your
-  resumes to Claude (server-side) and returns tailoring guidance, saved to your
-  prep notes.
-- Magic-link auth with Row Level Security, role-track tags, dark mode, and a
-  responsive layout.
+  resumes to a model via OpenRouter (server-side) and returns tailoring
+  guidance, saved to your prep notes.
+- Magic-link (or one-time code) auth with Row Level Security, role-track tags,
+  dark mode, and a responsive layout with a bottom tab bar on phones.
 
 ## Tech stack
 
@@ -74,6 +81,11 @@ In **Authentication → Providers**, ensure **Email** is enabled. In
 `http://localhost:3000` and add `http://localhost:3000/auth/callback` as a
 redirect URL.
 
+To also allow sign-in with a one-time code (handy when you open the email on a
+different device than the one you requested it from), edit
+**Authentication → Email Templates → Magic Link** and add the code to the
+body, e.g. `<p>Or enter this code: {{ .Token }}</p>`.
+
 ### 4. Install and run
 
 ```bash
@@ -92,19 +104,39 @@ magic link sent to your email.
 
 1. Push to GitHub and import the repo into [Vercel](https://vercel.com).
 2. Add the environment variables from `.env.local` in the Vercel project
-   settings.
+   settings. `NEXT_PUBLIC_*` values are baked in at build time, so **redeploy**
+   after changing them. Optionally set `APP_TIMEZONE` (defaults to
+   `Asia/Manila`) and `CRON_SECRET`.
 3. In Supabase → **Authentication → URL Configuration**, set the Site URL to
    your Vercel domain and add `https://your-app.vercel.app/auth/callback` as a
-   redirect URL.
+   redirect URL. Without this, magic links send you to localhost.
+
+`vercel.json` schedules a daily call to `/api/health`, which runs one tiny
+query so a free-tier Supabase project isn't paused for inactivity. You can open
+`/api/health` yourself to check the backend is reachable (it needs the
+`CRON_SECRET` bearer token if you set one).
+
+### Troubleshooting
+
+- **The live site loads but sign-in fails with "Can't reach the sign-in
+  service"** — the Supabase project is probably paused (free projects pause
+  after a week without use). Restore it from the Supabase dashboard.
+- **Magic link lands on "That sign-in link didn't work"** — it was used
+  already, expired, or opened in a different browser. Request a new one or
+  use the code from the email.
+- **Pages show "Couldn't load this page"** — the database returned an error;
+  the reference code matches the entry in the Vercel function logs.
 
 ## Project structure
 
 ```
-app/          routes: login, board, table, calendar, tasks, analytics,
-              prep, contacts, documents, application detail
+app/          routes: today (/), board, table, application detail,
+              calendar, tasks, documents, prep, contacts, analytics,
+              login, api/health
 components/    UI (board, forms, charts, shadcn primitives, …)
 lib/
   supabase/   browser + server clients, session middleware
+  navigation.ts  the five areas and their section tabs
   actions/    server actions (mutations)
   queries.ts  read helpers for server components
   analytics.ts, reminders.ts   pure, testable domain logic

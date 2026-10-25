@@ -1,7 +1,9 @@
 import { getPrepNotes, getApplications } from "@/lib/queries";
+import { LIBRARY_TABS } from "@/lib/navigation";
+import { PageHeader } from "@/components/page-header";
 import { PrepBoard } from "@/components/prep/prep-board";
 
-export const metadata = { title: "Prep · Huntfolio" };
+export const metadata = { title: "Interview prep · Huntfolio" };
 
 export default async function PrepPage() {
   const [notes, applications] = await Promise.all([
@@ -12,8 +14,12 @@ export default async function PrepPage() {
   const appOptions = applications.map((a) => ({ id: a.id, company: a.company }));
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6">
-      <h1 className="text-lg font-semibold">Interview prep</h1>
+    <div className="flex max-w-4xl flex-col gap-5">
+      <PageHeader
+        title="Library"
+        description="Company research, your question bank, and reusable STAR stories."
+        tabs={LIBRARY_TABS}
+      />
       <PrepBoard notes={notes} applications={appOptions} />
     </div>
   );

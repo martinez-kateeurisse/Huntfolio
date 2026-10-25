@@ -1,41 +1,28 @@
-import { Activity, CalendarCheck, PercentCircle, Bell } from "lucide-react";
-import { cn } from "@/lib/utils";
 import type { DashboardStats } from "@/lib/queries";
 
-function StatCard({
+function Stat({
   label,
   value,
   hint,
-  icon,
-  accent,
 }: {
   label: string;
   value: string;
   hint?: string;
-  icon: React.ReactNode;
-  accent?: boolean;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">
-          {label}
-        </span>
-        <span className="text-muted-foreground">{icon}</span>
-      </div>
-      <p
-        className={cn(
-          "mt-2 text-2xl font-semibold tabular-nums",
-          accent && "text-amber-600 dark:text-amber-400",
-        )}
-      >
-        {value}
+    <div className="min-w-0 px-4 py-3">
+      <p className="truncate text-xs font-medium text-muted-foreground">
+        {label}
       </p>
-      {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+      <p className="mt-1 text-xl font-semibold tabular-nums">{value}</p>
+      {hint && (
+        <p className="truncate text-xs text-muted-foreground">{hint}</p>
+      )}
     </div>
   );
 }
 
+// Three headline numbers in one quiet strip (deeper numbers live in Insights).
 export function StatStrip({ stats }: { stats: DashboardStats }) {
   const responseRate =
     stats.responseRate == null
@@ -43,35 +30,21 @@ export function StatStrip({ stats }: { stats: DashboardStats }) {
       : `${Math.round(stats.responseRate * 100)}%`;
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <StatCard
-        label="Active applications"
-        value={String(stats.active)}
-        hint="Not yet closed"
-        icon={<Activity className="size-4" />}
-      />
-      <StatCard
+    <div className="grid grid-cols-3 divide-x rounded-xl border bg-card">
+      <Stat label="Active" value={String(stats.active)} hint="Not yet closed" />
+      <Stat
         label="Response rate"
         value={responseRate}
         hint={
           stats.appliedCount > 0
             ? `${stats.respondedCount} of ${stats.appliedCount} applied`
-            : "No applications yet"
+            : "Nothing applied yet"
         }
-        icon={<PercentCircle className="size-4" />}
       />
-      <StatCard
+      <Stat
         label="Applied this week"
         value={String(stats.appliedThisWeek)}
         hint="Last 7 days"
-        icon={<CalendarCheck className="size-4" />}
-      />
-      <StatCard
-        label="Tasks due soon"
-        value={String(stats.tasksDueSoon)}
-        hint="Within 3 days"
-        icon={<Bell className="size-4" />}
-        accent={stats.tasksDueSoon > 0}
       />
     </div>
   );

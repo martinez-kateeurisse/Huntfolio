@@ -11,36 +11,21 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Plus } from "lucide-react";
+import { Eye, EyeOff, Search } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   PIPELINE,
   STATUS_LABELS,
-  CLOSE_REASONS,
-  CLOSE_REASON_LABELS,
+  TRACKS,
+  TRACK_LABELS,
   type Status,
-  type CloseReason,
 } from "@/lib/constants";
 import type { ApplicationWithSignals } from "@/lib/queries";
 import type { Application } from "@/lib/database.types";
 import { updateApplicationStatus, deleteApplication } from "@/lib/actions/applications";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,6 +39,7 @@ import {
 import { ApplicationCard } from "@/components/board/application-card";
 import { Column } from "@/components/board/column";
 import { ApplicationDialog } from "@/components/applications/application-dialog";
+import { CloseReasonDialog } from "@/components/applications/close-reason-dialog";
 import { EmptyState } from "@/components/empty-state";
 
 // Simple mounted-aware desktop check to avoid rendering two draggable trees.
@@ -80,6 +66,12 @@ export function KanbanBoard({
   const [mobileStatus, setMobileStatus] = useState<Status>("saved");
   const isDesktop = useIsDesktop();
 
+  // Toolbar filters. Closed applications are hidden by default: they only
+  // grow over time and push the active pipeline off-screen.
+  const [query, setQuery] = useState("");
+  const [track, setTrack] = useState<string>("all");
+  const [showClosed, setShowClosed] = useState(false);
+
   // Dialog state for add/edit.
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Application | null>(null);
@@ -88,10 +80,9 @@ export function KanbanBoard({
   const [deleting, setDeleting] = useState<ApplicationWithSignals | null>(null);
 
   // Close-reason prompt when moving to "closed".
-  const [pendingClose, setPendingClose] = useState<{
-    app: ApplicationWithSignals;
-    reason: CloseReason;
-  } | null>(null);
+  const [pendingClose, setPendingClose] = useState<ApplicationWithSignals | null>(
+    null,
+  );
 
   // Keep local (optimistic) state in sync when the server sends fresh data,
   // using the render-time "adjust state on prop change" pattern.
@@ -104,7 +95,24 @@ export function KanbanBoard({
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
-  const byStatus = (status: Status) => apps.filter((a) => a.status === status);
+  const q = query.trim().toLowerCase();
+  const filtered = apps.filter(
+    (a) =>
+      (track === "all" || a.track === track) &&
+      (!q ||
+        a.company.toLowerCase().includes(q) ||
+        a.role_title.toLowerCase().includes(q)),
+  );
+  const visibleStatuses = showClosed
+    ? PIPELINE
+    : PIPELINE.filter((s) => s !== "closed");
+  const closedCount = apps.filter((a) => a.status === "closed").length;
+  const currentMobileStatus = visibleStatuses.includes(mobileStatus)
+    ? mobileStatus
+    : visibleStatuses[0];
+
+  const byStatus = (status: Status) =>
+    filtered.filter((a) => a.status === status);
   const activeApp = apps.find((a) => a.id === activeId) ?? null;
 
   async function applyMove(
@@ -131,12 +139,15 @@ export function KanbanBoard({
     if (!result.ok) {
       setApps(previous); // revert
       toast.error(result.error);
+    } else if (status === "closed" && !showClosed) {
+      // The card just left the visible board; say where it went.
+      toast.success(`${app.company} moved to Closed`);
     }
   }
 
   function requestMove(app: ApplicationWithSignals, status: Status) {
     if (status === "closed") {
-      setPendingClose({ app, reason: "rejected" });
+      setPendingClose(app);
     } else {
       void applyMove(app, status);
     }
@@ -168,11 +179,21 @@ export function KanbanBoard({
   async function confirmDelete() {
     if (!deleting) return;
     const target = deleting;
+    const previous = apps;
     setDeleting(null);
     setApps((prev) => prev.filter((a) => a.id !== target.id));
     const result = await deleteApplication(target.id);
-    if (!result.ok) toast.error(result.error);
-    else toast.success("Application deleted");
+    if (!result.ok) {
+      setApps(previous); // revert
+      toast.error(result.error);
+    } else {
+      toast.success("Application deleted");
+    }
+  }
+
+  function clearFilters() {
+    setQuery("");
+    setTrack("all");
   }
 
   const cardHandlers = {
@@ -182,16 +203,10 @@ export function KanbanBoard({
   };
 
   const isEmpty = apps.length === 0;
+  const noMatches = !isEmpty && filtered.length === 0;
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Pipeline</h1>
-        <Button size="sm" onClick={openAdd}>
-          <Plus className="size-4" /> Add application
-        </Button>
-      </div>
-
       {isEmpty ? (
         <EmptyState
           title="No applications yet"
@@ -200,70 +215,132 @@ export function KanbanBoard({
           onAction={openAdd}
         />
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-        >
-          {isDesktop ? (
-            <div className="overflow-x-auto pb-2">
-              <div className="grid min-w-[64rem] grid-cols-6 gap-3">
-                {PIPELINE.map((status) => {
-                  const items = byStatus(status);
-                  return (
-                    <Column
-                      key={status}
-                      status={status}
-                      count={items.length}
-                      empty={items.length === 0}
-                    >
-                      {items.map((app) => (
-                        <ApplicationCard key={app.id} app={app} {...cardHandlers} />
-                      ))}
-                    </Column>
-                  );
-                })}
-              </div>
+        <>
+          {/* Toolbar */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-64">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search company or role"
+                className="h-8 pl-8"
+                aria-label="Search applications"
+              />
+            </div>
+            <div className="flex items-center gap-1 overflow-x-auto">
+              {["all", ...TRACKS].map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTrack(t)}
+                  className={cn(
+                    "shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                    track === t
+                      ? "border-transparent bg-foreground text-background"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {t === "all" ? "All tracks" : TRACK_LABELS[t as keyof typeof TRACK_LABELS]}
+                </button>
+              ))}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto text-muted-foreground"
+              onClick={() => setShowClosed((v) => !v)}
+            >
+              {showClosed ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              {showClosed ? "Hide closed" : `Show closed (${closedCount})`}
+            </Button>
+          </div>
+
+          {noMatches ? (
+            <div className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
+              No applications match these filters.{" "}
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="font-medium text-foreground underline-offset-2 hover:underline"
+              >
+                Clear filters
+              </button>
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
-              <div className="flex gap-1.5 overflow-x-auto pb-1">
-                {PIPELINE.map((status) => {
-                  const n = byStatus(status).length;
-                  return (
-                    <button
-                      key={status}
-                      onClick={() => setMobileStatus(status)}
-                      className={cn(
-                        "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm",
-                        mobileStatus === status
-                          ? "border-transparent bg-primary text-primary-foreground"
-                          : "bg-background text-muted-foreground",
-                      )}
-                    >
-                      {STATUS_LABELS[status]}
-                      <span className="text-xs opacity-70">{n}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <Column
-                status={mobileStatus}
-                count={byStatus(mobileStatus).length}
-                empty={byStatus(mobileStatus).length === 0}
-              >
-                {byStatus(mobileStatus).map((app) => (
-                  <ApplicationCard key={app.id} app={app} {...cardHandlers} />
-                ))}
-              </Column>
-            </div>
-          )}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCorners}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+            >
+              {isDesktop ? (
+                <div className="overflow-x-auto pb-2">
+                  <div
+                    className={cn(
+                      "grid gap-3",
+                      showClosed
+                        ? "min-w-[62rem] grid-cols-6"
+                        : "min-w-[52rem] grid-cols-5",
+                    )}
+                  >
+                    {visibleStatuses.map((status) => {
+                      const items = byStatus(status);
+                      return (
+                        <Column
+                          key={status}
+                          status={status}
+                          count={items.length}
+                          empty={items.length === 0}
+                        >
+                          {items.map((app) => (
+                            <ApplicationCard key={app.id} app={app} {...cardHandlers} />
+                          ))}
+                        </Column>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <div className="flex gap-1.5 overflow-x-auto pb-1">
+                    {visibleStatuses.map((status) => {
+                      const n = byStatus(status).length;
+                      return (
+                        <button
+                          key={status}
+                          onClick={() => setMobileStatus(status)}
+                          className={cn(
+                            "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm",
+                            currentMobileStatus === status
+                              ? "border-transparent bg-primary text-primary-foreground"
+                              : "bg-background text-muted-foreground",
+                          )}
+                        >
+                          {STATUS_LABELS[status]}
+                          <span className="text-xs opacity-70">{n}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <Column
+                    status={currentMobileStatus}
+                    count={byStatus(currentMobileStatus).length}
+                    empty={byStatus(currentMobileStatus).length === 0}
+                  >
+                    {byStatus(currentMobileStatus).map((app) => (
+                      <ApplicationCard key={app.id} app={app} {...cardHandlers} />
+                    ))}
+                  </Column>
+                </div>
+              )}
 
-          <DragOverlay>
-            {activeApp ? <ApplicationCard app={activeApp} overlay /> : null}
-          </DragOverlay>
-        </DndContext>
+              <DragOverlay>
+                {activeApp ? <ApplicationCard app={activeApp} overlay /> : null}
+              </DragOverlay>
+            </DndContext>
+          )}
+        </>
       )}
 
       <ApplicationDialog
@@ -272,58 +349,17 @@ export function KanbanBoard({
         application={editing}
       />
 
-      {/* Close-reason prompt */}
-      <Dialog
+      {/* key resets the chosen reason for each new prompt */}
+      <CloseReasonDialog
+        key={pendingClose?.id ?? "none"}
         open={Boolean(pendingClose)}
-        onOpenChange={(o) => !o && setPendingClose(null)}
-      >
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Close this application</DialogTitle>
-            <DialogDescription>
-              Why are you closing{" "}
-              <span className="font-medium text-foreground">
-                {pendingClose?.app.company}
-              </span>
-              ?
-            </DialogDescription>
-          </DialogHeader>
-          <Select
-            value={pendingClose?.reason}
-            onValueChange={(v) =>
-              setPendingClose((p) =>
-                p ? { ...p, reason: v as CloseReason } : p,
-              )
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CLOSE_REASONS.map((r) => (
-                <SelectItem key={r} value={r}>
-                  {CLOSE_REASON_LABELS[r]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setPendingClose(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (pendingClose) {
-                  void applyMove(pendingClose.app, "closed", pendingClose.reason);
-                  setPendingClose(null);
-                }
-              }}
-            >
-              Close application
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        company={pendingClose?.company ?? null}
+        onCancel={() => setPendingClose(null)}
+        onConfirm={(reason) => {
+          if (pendingClose) void applyMove(pendingClose, "closed", reason);
+          setPendingClose(null);
+        }}
+      />
 
       {/* Delete confirmation */}
       <AlertDialog

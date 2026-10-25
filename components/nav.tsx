@@ -3,17 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutGrid,
-  Table2,
-  CheckSquare,
-  CalendarDays,
-  FileText,
   BarChart3,
-  BookOpen,
-  Users,
+  Briefcase,
+  CalendarDays,
+  House,
+  Library,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { NAV_AREAS, areaOf, type NavArea } from "@/lib/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,52 +24,46 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/lib/actions/auth";
 
-const TABS = [
-  { href: "/applications", label: "Board", icon: LayoutGrid, match: /^\/applications(\/[^/]+)?$/, exclude: /^\/applications\/table/ },
-  { href: "/applications/table", label: "Table", icon: Table2, match: /^\/applications\/table/ },
-  { href: "/analytics", label: "Analytics", icon: BarChart3, match: /^\/analytics/ },
-  { href: "/calendar", label: "Calendar", icon: CalendarDays, match: /^\/calendar/ },
-  { href: "/tasks", label: "Tasks", icon: CheckSquare, match: /^\/tasks/ },
-  { href: "/prep", label: "Prep", icon: BookOpen, match: /^\/prep/ },
-  { href: "/contacts", label: "Contacts", icon: Users, match: /^\/contacts/ },
-  { href: "/documents", label: "Documents", icon: FileText, match: /^\/documents/ },
-];
+const ICONS: Record<NavArea, React.ElementType> = {
+  today: House,
+  applications: Briefcase,
+  schedule: CalendarDays,
+  library: Library,
+  insights: BarChart3,
+};
 
+// Top bar: brand, the five areas (desktop), theme + account.
 export function Nav({ email }: { email: string | null }) {
-  const pathname = usePathname();
-
-  function isActive(tab: (typeof TABS)[number]) {
-    if (tab.exclude && tab.exclude.test(pathname)) return false;
-    return tab.match.test(pathname);
-  }
+  const active = areaOf(usePathname());
 
   return (
     <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-1 px-4">
-        <Link href="/applications" className="mr-3 flex items-center gap-2 font-semibold">
+      <div className="mx-auto flex h-14 max-w-6xl items-center gap-1 px-4 sm:px-6">
+        <Link href="/" className="mr-4 flex items-center gap-2 font-semibold">
           <span className="grid size-6 place-items-center rounded-md bg-primary text-primary-foreground text-xs">
             HF
           </span>
-          <span className="hidden sm:inline">Huntfolio</span>
+          <span>Huntfolio</span>
         </Link>
 
-        <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {TABS.map((tab) => {
-            const Icon = tab.icon;
-            const active = isActive(tab);
+        <nav className="hidden items-center gap-0.5 md:flex" aria-label="Main">
+          {NAV_AREAS.map((area) => {
+            const Icon = ICONS[area.key];
+            const isActive = active === area.key;
             return (
               <Link
-                key={tab.href}
-                href={tab.href}
+                key={area.key}
+                href={area.href}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors sm:px-3",
-                  active
+                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  isActive
                     ? "bg-muted text-foreground"
                     : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                 )}
               >
                 <Icon className="size-4" />
-                <span className="hidden sm:inline">{tab.label}</span>
+                {area.label}
               </Link>
             );
           })}
@@ -107,5 +99,38 @@ export function Nav({ email }: { email: string | null }) {
         </div>
       </div>
     </header>
+  );
+}
+
+// Phone: the same five areas as a fixed bottom tab bar, within thumb reach.
+export function MobileNav() {
+  const active = areaOf(usePathname());
+
+  return (
+    <nav
+      aria-label="Main"
+      className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+    >
+      <div className="grid grid-cols-5">
+        {NAV_AREAS.map((area) => {
+          const Icon = ICONS[area.key];
+          const isActive = active === area.key;
+          return (
+            <Link
+              key={area.key}
+              href={area.href}
+              aria-current={isActive ? "page" : undefined}
+              className={cn(
+                "flex flex-col items-center gap-1 py-2 text-[11px] font-medium",
+                isActive ? "text-foreground" : "text-muted-foreground",
+              )}
+            >
+              <Icon className={cn("size-5", isActive && "stroke-[2.25]")} />
+              {area.label}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }

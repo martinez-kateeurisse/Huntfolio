@@ -1,6 +1,7 @@
 import { BarChart3 } from "lucide-react";
 import { getAnalytics } from "@/lib/queries";
 import { TRACKS } from "@/lib/constants";
+import { PageHeader } from "@/components/page-header";
 import { AnalyticsFilters } from "@/components/analytics/filters";
 import { KpiCards } from "@/components/analytics/kpi-cards";
 import { FunnelChart } from "@/components/analytics/funnel-chart";
@@ -10,7 +11,7 @@ import { TimeInStage } from "@/components/analytics/time-in-stage";
 import { AppsOverTime } from "@/components/analytics/apps-over-time";
 import { EmptyState } from "@/components/empty-state";
 
-export const metadata = { title: "Analytics · Huntfolio" };
+export const metadata = { title: "Insights · Huntfolio" };
 
 function Section({
   title,
@@ -58,10 +59,11 @@ export default async function AnalyticsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold">Analytics</h1>
-        <AnalyticsFilters track={track} range={range} />
-      </div>
+      <PageHeader
+        title="Insights"
+        description="How your search is converting, and where it stalls."
+        actions={<AnalyticsFilters track={track} range={range} />}
+      />
 
       <KpiCards data={data} />
 

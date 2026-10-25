@@ -10,6 +10,8 @@ import {
   subMonths,
 } from "date-fns";
 import { getCalendarEvents } from "@/lib/queries";
+import { SCHEDULE_TABS } from "@/lib/navigation";
+import { PageHeader } from "@/components/page-header";
 import { CalendarView } from "@/components/calendar/calendar-view";
 
 export const metadata = { title: "Calendar · Huntfolio" };
@@ -36,13 +38,20 @@ export default async function CalendarPage({
   const next = format(addMonths(monthStart, 1), "yyyy-MM");
 
   return (
-    <CalendarView
-      events={events}
-      monthISO={monthStart.toISOString()}
-      monthLabel={format(monthStart, "MMMM yyyy")}
-      prevHref={`/calendar?month=${prev}`}
-      nextHref={`/calendar?month=${next}`}
-      todayHref="/calendar"
-    />
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Schedule"
+        description="Interviews and dated tasks, by month."
+        tabs={SCHEDULE_TABS}
+      />
+      <CalendarView
+        events={events}
+        monthISO={monthStart.toISOString()}
+        monthLabel={format(monthStart, "MMMM yyyy")}
+        prevHref={`/calendar?month=${prev}`}
+        nextHref={`/calendar?month=${next}`}
+        todayHref="/calendar"
+      />
+    </div>
   );
 }

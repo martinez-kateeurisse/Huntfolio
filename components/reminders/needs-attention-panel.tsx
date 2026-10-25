@@ -31,30 +31,57 @@ const ICON_TONE: Record<NudgeKind, string> = {
   stale: "text-muted-foreground",
 };
 
-export function NeedsAttentionPanel({ nudges }: { nudges: Nudge[] }) {
-  if (nudges.length === 0) {
-    return (
-      <div className="flex items-center gap-2 rounded-xl border bg-card p-4 text-sm text-muted-foreground">
-        <CheckCircle2 className="size-4 text-emerald-500" />
-        You&apos;re all caught up — nothing needs attention.
-      </div>
-    );
-  }
+export function NeedsAttentionPanel({
+  nudges,
+  title = "Needs attention",
+  emptyText = "You're all caught up — nothing needs attention.",
+  limit = 5,
+}: {
+  nudges: Nudge[];
+  title?: string;
+  emptyText?: string;
+  limit?: number;
+}) {
+  // Long lists bury the point; show the most urgent few and let the rest
+  // expand on demand.
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? nudges : nudges.slice(0, limit);
+  const hidden = nudges.length - visible.length;
 
   return (
     <div className="rounded-xl border bg-card p-4">
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-1 flex items-center gap-2">
         <AlarmClock className="size-4 text-muted-foreground" />
-        <h2 className="text-sm font-medium">Needs attention</h2>
-        <span className="rounded-full bg-muted px-1.5 text-xs text-muted-foreground">
-          {nudges.length}
-        </span>
+        <h2 className="text-sm font-medium">{title}</h2>
+        {nudges.length > 0 && (
+          <span className="rounded-full bg-muted px-1.5 text-xs text-muted-foreground">
+            {nudges.length}
+          </span>
+        )}
       </div>
-      <ul className="flex flex-col divide-y">
-        {nudges.map((n) => (
-          <NudgeRow key={n.id} nudge={n} />
-        ))}
-      </ul>
+      {nudges.length === 0 ? (
+        <p className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
+          <CheckCircle2 className="size-4 text-emerald-500" />
+          {emptyText}
+        </p>
+      ) : (
+        <>
+          <ul className="flex flex-col divide-y">
+            {visible.map((n) => (
+              <NudgeRow key={n.id} nudge={n} />
+            ))}
+          </ul>
+          {nudges.length > limit && (
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              className="mt-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              {showAll ? "Show less" : `Show ${hidden} more`}
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 }

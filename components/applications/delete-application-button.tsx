@@ -18,12 +18,18 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+// Pass `open` + `onOpenChange` to open it from elsewhere (e.g. a menu item);
+// otherwise it renders its own trigger button.
 export function DeleteApplicationButton({
   id,
   company,
+  open,
+  onOpenChange,
 }: {
   id: string;
   company: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -41,12 +47,14 @@ export function DeleteApplicationButton({
   }
 
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm" className="text-destructive">
-          <Trash2 className="size-4" /> Delete
-        </Button>
-      </AlertDialogTrigger>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      {open === undefined && (
+        <AlertDialogTrigger asChild>
+          <Button variant="outline" size="sm" className="text-destructive">
+            <Trash2 className="size-4" /> Delete
+          </Button>
+        </AlertDialogTrigger>
+      )}
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete application?</AlertDialogTitle>

@@ -1,9 +1,15 @@
 "use client";
 
-import { useTransition } from "react";
-import { useForm, useWatch, Controller } from "react-hook-form";
+import { useState, useTransition } from "react";
+import {
+  useForm,
+  useWatch,
+  Controller,
+  type FieldErrors,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2 } from "lucide-react";
+import { format } from "date-fns";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { applicationSchema, type ApplicationFormValues } from "@/lib/schemas";
 import {
@@ -39,10 +45,26 @@ import {
 
 const NONE = "__none__"; // Radix Select can't use an empty-string value.
 
+// yyyy-mm-dd in local time (slicing the ISO string would give the UTC date,
+// which is a day early for anything stamped in the morning east of UTC).
 function toDateInput(iso: string | null | undefined): string {
   if (!iso) return "";
-  return iso.slice(0, 10); // yyyy-mm-dd
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "" : format(date, "yyyy-MM-dd");
 }
+
+// Fields tucked under "More details" so adding a role takes seconds.
+const MORE_FIELDS: (keyof ApplicationFormValues)[] = [
+  "priority",
+  "source",
+  "work_mode",
+  "location",
+  "salary_min",
+  "salary_max",
+  "salary_currency",
+  "date_applied",
+  "notes",
+];
 
 function defaultsFrom(app?: Application | null): ApplicationFormValues {
   return {
@@ -74,6 +96,8 @@ export function ApplicationForm({
 }) {
   const [isPending, startTransition] = useTransition();
   const isEdit = Boolean(application);
+  // Editing shows everything; adding starts with just the essentials.
+  const [showMore, setShowMore] = useState(isEdit);
 
   const {
     register,
@@ -86,6 +110,11 @@ export function ApplicationForm({
   });
 
   const status = useWatch({ control, name: "status" });
+
+  // If validation fails on a hidden field, reveal it so the error is visible.
+  function onInvalid(errs: FieldErrors<ApplicationFormValues>) {
+    if (MORE_FIELDS.some((f) => f in errs)) setShowMore(true);
+  }
 
   function onSubmit(values: ApplicationFormValues) {
     startTransition(async () => {
@@ -103,15 +132,28 @@ export function ApplicationForm({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+    <form
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      className="flex flex-col gap-4"
+    >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Company" error={errors.company?.message} className="sm:col-span-1">
+        <Field label="Company" error={errors.company?.message}>
           <Input {...register("company")} placeholder="Acme Inc." autoFocus />
         </Field>
         <Field label="Role title" error={errors.role_title?.message}>
           <Input {...register("role_title")} placeholder="Frontend Engineer" />
         </Field>
 
+        <Field label="Job URL" error={errors.job_url?.message} className="sm:col-span-2">
+          <Input {...register("job_url")} placeholder="https://…" />
+        </Field>
+
+        <SelectField
+          control={control}
+          name="status"
+          label="Status"
+          options={STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
+        />
         <SelectField
           control={control}
           name="track"
@@ -123,65 +165,7 @@ export function ApplicationForm({
             label: TRACK_LABELS[t as Track],
           }))}
         />
-        <SelectField
-          control={control}
-          name="status"
-          label="Status"
-          options={STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
-        />
 
-        <SelectField
-          control={control}
-          name="priority"
-          label="Priority"
-          options={PRIORITIES.map((p) => ({
-            value: p,
-            label: PRIORITY_LABELS[p],
-          }))}
-        />
-        <SelectField
-          control={control}
-          name="source"
-          label="Source"
-          placeholder="No source"
-          allowNone
-          options={SOURCES.map((s) => ({ value: s, label: s }))}
-        />
-
-        <SelectField
-          control={control}
-          name="work_mode"
-          label="Work mode"
-          placeholder="Unspecified"
-          allowNone
-          options={WORK_MODES.map((w) => ({ value: w, label: w }))}
-        />
-        <Field label="Location" error={errors.location?.message}>
-          <Input {...register("location")} placeholder="Makati City" />
-        </Field>
-
-        <Field label="Job URL" error={errors.job_url?.message} className="sm:col-span-2">
-          <Input {...register("job_url")} placeholder="https://…" />
-        </Field>
-
-        <div className="grid grid-cols-[1fr_1fr_auto] gap-2 sm:col-span-2">
-          <Field label="Salary min" error={errors.salary_min?.message}>
-            <Input type="number" min={0} {...register("salary_min")} placeholder="0" />
-          </Field>
-          <Field label="Salary max" error={errors.salary_max?.message}>
-            <Input type="number" min={0} {...register("salary_max")} placeholder="0" />
-          </Field>
-          <SelectField
-            control={control}
-            name="salary_currency"
-            label="Currency"
-            options={CURRENCIES.map((c) => ({ value: c, label: c }))}
-          />
-        </div>
-
-        <Field label="Date applied" error={errors.date_applied?.message}>
-          <Input type="date" {...register("date_applied")} />
-        </Field>
         {status === "closed" && (
           <SelectField
             control={control}
@@ -197,13 +181,83 @@ export function ApplicationForm({
         )}
       </div>
 
-      <Field label="Notes" error={errors.notes?.message}>
-        <Textarea
-          {...register("notes")}
-          rows={3}
-          placeholder="Anything worth remembering…"
+      <button
+        type="button"
+        onClick={() => setShowMore((v) => !v)}
+        aria-expanded={showMore}
+        className="flex w-fit items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <ChevronDown
+          className={`size-4 transition-transform ${showMore ? "rotate-180" : ""}`}
         />
-      </Field>
+        {showMore ? "Fewer details" : "More details"}
+        {!showMore && (
+          <span className="font-normal">
+            — salary, location, source, notes…
+          </span>
+        )}
+      </button>
+
+      {showMore && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <SelectField
+            control={control}
+            name="priority"
+            label="Priority"
+            options={PRIORITIES.map((p) => ({
+              value: p,
+              label: PRIORITY_LABELS[p],
+            }))}
+          />
+          <SelectField
+            control={control}
+            name="source"
+            label="Source"
+            placeholder="No source"
+            allowNone
+            options={SOURCES.map((s) => ({ value: s, label: s }))}
+          />
+
+          <SelectField
+            control={control}
+            name="work_mode"
+            label="Work mode"
+            placeholder="Unspecified"
+            allowNone
+            options={WORK_MODES.map((w) => ({ value: w, label: w }))}
+          />
+          <Field label="Location" error={errors.location?.message}>
+            <Input {...register("location")} placeholder="Makati City" />
+          </Field>
+
+          <div className="grid grid-cols-[1fr_1fr_auto] gap-2 sm:col-span-2">
+            <Field label="Salary min" error={errors.salary_min?.message}>
+              <Input type="number" min={0} {...register("salary_min")} placeholder="0" />
+            </Field>
+            <Field label="Salary max" error={errors.salary_max?.message}>
+              <Input type="number" min={0} {...register("salary_max")} placeholder="0" />
+            </Field>
+            <SelectField
+              control={control}
+              name="salary_currency"
+              label="Currency"
+              options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+            />
+          </div>
+
+          <Field label="Date applied" error={errors.date_applied?.message}>
+            <Input type="date" {...register("date_applied")} />
+          </Field>
+
+          <Field label="Notes" error={errors.notes?.message} className="sm:col-span-2">
+            <Textarea
+              {...register("notes")}
+              rows={3}
+              placeholder="Anything worth remembering — paste the job description here for AI tailoring."
+            />
+          </Field>
+        </div>
+      )}
 
       <div className="mt-1 flex justify-end gap-2">
         <Button type="submit" disabled={isPending}>

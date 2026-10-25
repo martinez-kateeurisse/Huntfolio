@@ -4,14 +4,15 @@ import Link from "next/link";
 import { Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// Friendly first-run placeholder. Provide either onAction (client) or
-// actionHref (for server pages).
+// Friendly first-run placeholder. Provide either onAction (client),
+// actionHref (for server pages), or a ready-made `action` element.
 export function EmptyState({
   title,
   description,
   actionLabel,
   onAction,
   actionHref,
+  action,
   icon,
 }: {
   title: string;
@@ -19,6 +20,7 @@ export function EmptyState({
   actionLabel?: string;
   onAction?: () => void;
   actionHref?: string;
+  action?: React.ReactNode;
   icon?: React.ReactNode;
 }) {
   return (
@@ -42,6 +44,7 @@ export function EmptyState({
             <Link href={actionHref}>{actionLabel}</Link>
           </Button>
         ) : null)}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }

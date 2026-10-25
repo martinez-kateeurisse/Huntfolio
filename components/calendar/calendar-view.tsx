@@ -71,7 +71,7 @@ export function CalendarView({
           <Button variant="outline" size="sm" asChild className="ml-1">
             <Link href={todayHref}>Today</Link>
           </Button>
-          <h1 className="ml-2 text-lg font-semibold">{monthLabel}</h1>
+          <h2 className="ml-2 text-base font-semibold">{monthLabel}</h2>
         </div>
 
         <div className="flex items-center rounded-lg border p-0.5">

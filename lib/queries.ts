@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { getSessionUser } from "@/lib/supabase/server";
 import {
   APPLIED_OR_BEYOND,
   RESPONDED_STATUSES,
@@ -76,15 +77,21 @@ export type DashboardStats = {
   appliedCount: number;
   appliedThisWeek: number;
   tasksDueSoon: number;
+  total: number;
 };
 
 async function requireUserId() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  const { supabase, user } = await getSessionUser();
+  if (!user) redirect("/login");
   return { supabase, userId: user.id };
+}
+
+// Supabase reports failures in `error` instead of throwing. Raise them so the
+// route's error boundary shows a real message, rather than rendering an empty
+// page that looks like the data is gone.
+function assertOk(...results: { error: { message: string } | null }[]) {
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw new Error(failed.error.message);
 }
 
 // All applications with their board signals (next task due, next interview).
@@ -94,25 +101,26 @@ export async function getApplicationsWithSignals(): Promise<
   if (IS_DEMO) return demoGetApplicationsWithSignals();
   const { supabase } = await requireUserId();
 
-  const [{ data: apps }, { data: tasks }, { data: interviews }] =
-    await Promise.all([
-      supabase
-        .from("applications")
-        .select("*")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("tasks")
-        .select("application_id, due_date")
-        .eq("status", "todo")
-        .not("due_date", "is", null)
-        .not("application_id", "is", null)
-        .order("due_date", { ascending: true }),
-      supabase
-        .from("interviews")
-        .select("application_id, scheduled_at")
-        .gte("scheduled_at", new Date().toISOString())
-        .order("scheduled_at", { ascending: true }),
-    ]);
+  const results = await Promise.all([
+    supabase
+      .from("applications")
+      .select("*")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("tasks")
+      .select("application_id, due_date")
+      .eq("status", "todo")
+      .not("due_date", "is", null)
+      .not("application_id", "is", null)
+      .order("due_date", { ascending: true }),
+    supabase
+      .from("interviews")
+      .select("application_id, scheduled_at")
+      .gte("scheduled_at", new Date().toISOString())
+      .order("scheduled_at", { ascending: true }),
+  ]);
+  assertOk(...results);
+  const [{ data: apps }, { data: tasks }, { data: interviews }] = results;
 
   // First seen wins because both lists are sorted ascending by date.
   const nextTask = new Map<string, string>();
@@ -143,11 +151,12 @@ export async function getApplicationsWithSignals(): Promise<
 export async function getApplications(): Promise<Application[]> {
   if (IS_DEMO) return demoGetApplications();
   const { supabase } = await requireUserId();
-  const { data } = await supabase
+  const res = await supabase
     .from("applications")
     .select("*")
     .order("created_at", { ascending: false });
-  return data ?? [];
+  assertOk(res);
+  return res.data ?? [];
 }
 
 export async function getApplicationDetail(
@@ -156,20 +165,17 @@ export async function getApplicationDetail(
   if (IS_DEMO) return demoGetApplicationDetail(id);
   const { supabase } = await requireUserId();
 
-  const { data: application } = await supabase
+  const appRes = await supabase
     .from("applications")
     .select("*")
     .eq("id", id)
     .maybeSingle();
+  assertOk(appRes);
+  const application = appRes.data;
 
   if (!application) return null;
 
-  const [
-    { data: tasks },
-    { data: history },
-    { data: interviews },
-    { data: attachRows },
-  ] = await Promise.all([
+  const results = await Promise.all([
       supabase
         .from("tasks")
         .select("*")
@@ -192,17 +198,25 @@ export async function getApplicationDetail(
         .select("document_id")
         .eq("application_id", id),
     ]);
+  assertOk(...results);
+  const [
+    { data: tasks },
+    { data: history },
+    { data: interviews },
+    { data: attachRows },
+  ] = results;
 
   // Resolve attached documents in a second step (avoids relying on a declared
   // FK relationship in the generated types).
   const docIds = (attachRows ?? []).map((r) => r.document_id);
   let attachedDocuments: Document[] = [];
   if (docIds.length > 0) {
-    const { data: docs } = await supabase
+    const docsRes = await supabase
       .from("documents")
       .select("*")
       .in("id", docIds);
-    attachedDocuments = docs ?? [];
+    assertOk(docsRes);
+    attachedDocuments = docsRes.data ?? [];
   }
 
   return {
@@ -217,14 +231,15 @@ export async function getApplicationDetail(
 export async function getTasks(): Promise<TaskWithApplication[]> {
   if (IS_DEMO) return demoGetTasks();
   const { supabase } = await requireUserId();
-  const { data } = await supabase
+  const res = await supabase
     .from("tasks")
     .select("*, application:applications(id, company)")
     .order("due_date", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true });
+  assertOk(res);
   // The FK tasks.application_id -> applications(id) makes this embed work at
   // runtime; our hand-written types don't declare the relation, so cast.
-  return (data ?? []) as unknown as TaskWithApplication[];
+  return (res.data ?? []) as unknown as TaskWithApplication[];
 }
 
 export type PrepNoteWithApplication = PrepNote & {
@@ -235,11 +250,12 @@ export type PrepNoteWithApplication = PrepNote & {
 export async function getPrepNotes(): Promise<PrepNoteWithApplication[]> {
   if (IS_DEMO) return demoGetPrepNotes();
   const { supabase } = await requireUserId();
-  const { data } = await supabase
+  const res = await supabase
     .from("prep_notes")
     .select("*, application:applications(id, company)")
     .order("updated_at", { ascending: false });
-  return (data ?? []) as unknown as PrepNoteWithApplication[];
+  assertOk(res);
+  return (res.data ?? []) as unknown as PrepNoteWithApplication[];
 }
 
 // For the application detail: this app's research notes + all reusable STAR
@@ -249,7 +265,7 @@ export async function getApplicationPrep(
 ): Promise<{ research: PrepNote[]; star: PrepNote[] }> {
   if (IS_DEMO) return demoGetApplicationPrep(applicationId);
   const { supabase } = await requireUserId();
-  const [{ data: research }, { data: star }] = await Promise.all([
+  const results = await Promise.all([
     supabase
       .from("prep_notes")
       .select("*")
@@ -262,6 +278,8 @@ export async function getApplicationPrep(
       .eq("category", "star")
       .order("updated_at", { ascending: false }),
   ]);
+  assertOk(...results);
+  const [{ data: research }, { data: star }] = results;
   return { research: research ?? [], star: star ?? [] };
 }
 
@@ -272,11 +290,12 @@ export type ContactWithApplication = Contact & {
 export async function getContacts(): Promise<ContactWithApplication[]> {
   if (IS_DEMO) return demoGetContacts();
   const { supabase } = await requireUserId();
-  const { data } = await supabase
+  const res = await supabase
     .from("contacts")
     .select("*, application:applications(id, company)")
     .order("created_at", { ascending: false });
-  return (data ?? []) as unknown as ContactWithApplication[];
+  assertOk(res);
+  return (res.data ?? []) as unknown as ContactWithApplication[];
 }
 
 export async function getContactsForApplication(
@@ -284,23 +303,25 @@ export async function getContactsForApplication(
 ): Promise<Contact[]> {
   if (IS_DEMO) return demoGetContactsForApplication(applicationId);
   const { supabase } = await requireUserId();
-  const { data } = await supabase
+  const res = await supabase
     .from("contacts")
     .select("*")
     .eq("application_id", applicationId)
     .order("created_at", { ascending: false });
-  return data ?? [];
+  assertOk(res);
+  return res.data ?? [];
 }
 
 export async function getDocuments(): Promise<Document[]> {
   if (IS_DEMO) return demoGetDocuments();
   const { supabase } = await requireUserId();
-  const { data } = await supabase
+  const res = await supabase
     .from("documents")
     .select("*")
     .order("type", { ascending: true })
     .order("created_at", { ascending: false });
-  return data ?? [];
+  assertOk(res);
+  return res.data ?? [];
 }
 
 // Interviews + dated tasks within [rangeStart, rangeEnd], normalized so the
@@ -312,22 +333,23 @@ export async function getCalendarEvents(
   if (IS_DEMO) return demoGetCalendarEvents(rangeStart, rangeEnd);
   const { supabase } = await requireUserId();
 
-  const [{ data: interviews }, { data: tasks }, { data: apps }] =
-    await Promise.all([
-      supabase
-        .from("interviews")
-        .select("*")
-        .not("scheduled_at", "is", null)
-        .gte("scheduled_at", rangeStart)
-        .lte("scheduled_at", rangeEnd),
-      supabase
-        .from("tasks")
-        .select("*")
-        .not("due_date", "is", null)
-        .gte("due_date", rangeStart)
-        .lte("due_date", rangeEnd),
-      supabase.from("applications").select("id, company"),
-    ]);
+  const results = await Promise.all([
+    supabase
+      .from("interviews")
+      .select("*")
+      .not("scheduled_at", "is", null)
+      .gte("scheduled_at", rangeStart)
+      .lte("scheduled_at", rangeEnd),
+    supabase
+      .from("tasks")
+      .select("*")
+      .not("due_date", "is", null)
+      .gte("due_date", rangeStart)
+      .lte("due_date", rangeEnd),
+    supabase.from("applications").select("id, company"),
+  ]);
+  assertOk(...results);
+  const [{ data: interviews }, { data: tasks }, { data: apps }] = results;
 
   const companyById = new Map(
     (apps ?? []).map((a) => [a.id, a.company as string]),
@@ -377,7 +399,7 @@ export async function getAnalytics(
   }
 
   const { supabase } = await requireUserId();
-  const [{ data: apps }, { data: history }] = await Promise.all([
+  const results = await Promise.all([
     supabase
       .from("applications")
       .select("id, track, source, date_applied, status"),
@@ -385,6 +407,8 @@ export async function getAnalytics(
       .from("status_history")
       .select("application_id, to_status, changed_at"),
   ]);
+  assertOk(...results);
+  const [{ data: apps }, { data: history }] = results;
 
   return computeAnalytics(
     (apps ?? []) as AppRow[],
@@ -400,15 +424,17 @@ export async function getReminders(): Promise<Nudge[]> {
   }
 
   const { supabase } = await requireUserId();
+  const results = await Promise.all([
+    supabase.from("applications").select("id, company, status, date_applied"),
+    supabase.from("status_history").select("application_id, changed_at"),
+    supabase.from("interviews").select("application_id, scheduled_at"),
+    supabase
+      .from("tasks")
+      .select("id, title, status, due_date, application_id"),
+  ]);
+  assertOk(...results);
   const [{ data: apps }, { data: history }, { data: interviews }, { data: tasks }] =
-    await Promise.all([
-      supabase.from("applications").select("id, company, status, date_applied"),
-      supabase.from("status_history").select("application_id, changed_at"),
-      supabase.from("interviews").select("application_id, scheduled_at"),
-      supabase
-        .from("tasks")
-        .select("id, title, status, due_date, application_id"),
-    ]);
+    results;
 
   return computeReminders({
     apps: apps ?? [],
@@ -427,17 +453,18 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     Date.now() + 3 * 24 * 60 * 60 * 1000,
   ).toISOString();
 
-  const [{ data: apps }, { data: history }, { data: dueTasks }] =
-    await Promise.all([
-      supabase.from("applications").select("status, date_applied"),
-      supabase.from("status_history").select("application_id, to_status"),
-      supabase
-        .from("tasks")
-        .select("id")
-        .eq("status", "todo")
-        .not("due_date", "is", null)
-        .lte("due_date", inThreeDays),
-    ]);
+  const results = await Promise.all([
+    supabase.from("applications").select("status, date_applied"),
+    supabase.from("status_history").select("application_id, to_status"),
+    supabase
+      .from("tasks")
+      .select("id")
+      .eq("status", "todo")
+      .not("due_date", "is", null)
+      .lte("due_date", inThreeDays),
+  ]);
+  assertOk(...results);
+  const [{ data: apps }, { data: history }, { data: dueTasks }] = results;
 
   const active = (apps ?? []).filter((a) => a.status !== "closed").length;
   const appliedThisWeek = (apps ?? []).filter(
@@ -466,5 +493,6 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     appliedCount,
     appliedThisWeek,
     tasksDueSoon: (dueTasks ?? []).length,
+    total: (apps ?? []).length,
   };
 }
