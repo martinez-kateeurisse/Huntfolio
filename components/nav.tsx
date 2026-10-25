@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/lib/actions/auth";
 import { SetPasswordDialog } from "@/components/auth/set-password-dialog";
+import { LogoMark } from "@/components/logo";
 
 const ICONS: Record<NavArea, React.ElementType> = {
   today: House,
@@ -45,9 +46,7 @@ export function Nav({ email }: { email: string | null }) {
     <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-1 px-4 sm:px-6">
         <Link href="/" className="mr-4 flex items-center gap-2 font-semibold">
-          <span className="grid size-6 place-items-center rounded-md bg-primary text-primary-foreground text-xs">
-            HF
-          </span>
+          <LogoMark className="size-6" />
           <span>Huntfolio</span>
         </Link>
 
