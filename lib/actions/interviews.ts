@@ -53,6 +53,7 @@ export async function createInterview(
       user_id: userId,
       application_id: v.application_id,
       type: nullify(v.type),
+      round: v.round ? Number(v.round) : null,
       scheduled_at: nullify(v.scheduled_at),
       location: nullify(v.location),
       notes: nullify(v.notes),
@@ -87,6 +88,7 @@ export async function updateInterview(
     .from("interviews")
     .update({
       type: nullify(v.type),
+      round: v.round ? Number(v.round) : null,
       scheduled_at: nullify(v.scheduled_at),
       location: nullify(v.location),
       notes: nullify(v.notes),

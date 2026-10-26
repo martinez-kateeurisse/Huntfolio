@@ -20,8 +20,9 @@ The home page: **To do** (overdue and due in the next few days), **Follow up**
 
 ### Applications
 
-- **Board** — Kanban across `Saved → Applied → Screening → Interview → Offer →
-  No response → Closed`. Drag to change status (closing asks for a reason).
+- **Board** — Kanban across `Saved → Applied → Screening → Interview →
+  Final interview → Offer → No response → Closed`. Each interview carries a
+  round (Initial, 2nd, 3rd…), so several rounds sit under Interview. Drag to change status (closing asks for a reason).
   Applications still in Applied with no activity for 60 days move to
   **No response** on their own; drag one back if you hear from them.
 - **Multi-select** — the Select button (or Ctrl/⌘-click) lets you drag or move
@@ -119,6 +120,8 @@ In the Supabase **SQL Editor**, run the migrations in order:
    rest of the app works without it).
 4. `supabase/migrations/0004_inbox_reprocess.sql` — lets improved Gmail rules
    re-read emails they misread before.
+5. `supabase/migrations/0005_interview_rounds.sql` — interview rounds
+   (Initial, 2nd, 3rd…), numbering any existing interviews.
 
 ### 3. Enable auth
 

@@ -407,8 +407,8 @@ export function KanbanBoard({
                     className={cn(
                       "grid gap-2.5",
                       showClosed
-                        ? "min-w-[63rem] grid-cols-7"
-                        : "min-w-[54rem] grid-cols-6",
+                        ? "min-w-[70rem] grid-cols-8"
+                        : "min-w-[61rem] grid-cols-7",
                     )}
                   >
                     {visibleStatuses.map((status) => {

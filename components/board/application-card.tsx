@@ -15,11 +15,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TrackPill } from "@/components/track-pill";
-import { daysSince, dueLabel, formatDateTime } from "@/lib/format";
+import { format } from "date-fns";
+import { daysSince, dueLabel, formatTime } from "@/lib/format";
 import {
   PIPELINE,
   STATUS_LABELS,
   APPLIED_OR_BEYOND,
+  interviewRoundLabel,
   type Status,
 } from "@/lib/constants";
 import type { ApplicationWithSignals } from "@/lib/queries";
@@ -37,6 +39,7 @@ import {
 
 const STATUS_ACCENT: Partial<Record<Status, string>> = {
   interview: "border-l-2 border-l-amber-400 dark:border-l-amber-500",
+  final_interview: "border-l-2 border-l-orange-500",
   offer: "border-l-2 border-l-emerald-500",
 };
 
@@ -44,10 +47,12 @@ function Signal({ app }: { app: ApplicationWithSignals }) {
   // Priority: scheduled interview > next task due > employer viewed it
   // (while still waiting at Applied) > days since applied.
   if (app.nextInterviewAt) {
+    // "2nd · Oct 27, 2:00pm" — which round is next, and when.
+    const when = `${format(new Date(app.nextInterviewAt), "MMM d")}, ${formatTime(app.nextInterviewAt)}`;
     return (
       <span className="inline-flex min-w-0 items-center gap-1 truncate text-[11px] text-amber-600 dark:text-amber-400">
         <CalendarClock className="size-3 shrink-0" />
-        {formatDateTime(app.nextInterviewAt)}
+        {app.nextInterviewRound ? `${interviewRoundLabel(app.nextInterviewRound)} · ${when}` : when}
       </span>
     );
   }

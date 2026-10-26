@@ -3,10 +3,7 @@
 import { format } from "date-fns";
 import { CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  INTERVIEW_TYPE_LABELS,
-  type InterviewType,
-} from "@/lib/constants";
+import { interviewTitle } from "@/lib/constants";
 import type { CalendarEvent } from "@/lib/queries";
 import type { Interview } from "@/lib/database.types";
 import { TaskItem } from "@/components/tasks/task-item";
@@ -56,7 +53,7 @@ export function EventRow({
           {event.company ?? "Interview"}
         </p>
         <p className="truncate text-xs text-muted-foreground">
-          {iv.type ? INTERVIEW_TYPE_LABELS[iv.type as InterviewType] : "Interview"}{" "}
+          {interviewTitle(iv)}{" "}
           · {time}
         </p>
       </div>

@@ -14,10 +14,11 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/format";
 import {
-  INTERVIEW_TYPE_LABELS,
   INTERVIEW_OUTCOME_LABELS,
-  type InterviewType,
+  STATUS_LABELS,
+  interviewTitle,
   type InterviewOutcome,
+  type Status,
 } from "@/lib/constants";
 import type { Interview } from "@/lib/database.types";
 import { deleteInterview } from "@/lib/actions/interviews";
@@ -86,16 +87,23 @@ export function InterviewSection({
     });
   }
 
-  function moveToOffer() {
+  function moveTo(status: Status) {
     startTransition(async () => {
-      const result = await updateApplicationStatus(applicationId, "offer");
-      if (result.ok) toast.success("Moved to Offer");
+      const result = await updateApplicationStatus(applicationId, status);
+      if (result.ok) toast.success(`Moved to ${STATUS_LABELS[status]}`);
       else toast.error(result.error);
     });
   }
 
-  const canNudgeToOffer =
-    applicationStatus !== "offer" && applicationStatus !== "closed";
+  // After a passed round, the next step is the final interview — or the offer
+  // once the final round (or the Final interview stage) is behind you.
+  function nextStageAfter(iv: Interview): Status | null {
+    if (applicationStatus === "offer" || applicationStatus === "closed") return null;
+    return applicationStatus === "final_interview" || iv.type === "final"
+      ? "offer"
+      : "final_interview";
+  }
+  const highestRound = Math.max(0, ...interviews.map((iv) => iv.round ?? 0));
 
   return (
     <div className="rounded-xl border bg-card p-5">
@@ -127,9 +135,7 @@ export function InterviewSection({
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-medium">
-                        {iv.type
-                          ? INTERVIEW_TYPE_LABELS[iv.type as InterviewType]
-                          : "Interview"}
+                        {interviewTitle(iv)}
                       </span>
                       <span
                         className={cn(
@@ -188,22 +194,26 @@ export function InterviewSection({
                   </div>
                 </div>
 
-                {outcome === "passed" && canNudgeToOffer && (
-                  <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm dark:bg-emerald-950/50">
-                    <span className="text-emerald-700 dark:text-emerald-300">
-                      Passed — move this application to Offer?
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={moveToOffer}
-                      disabled={isPending}
-                      className="shrink-0"
-                    >
-                      Move to Offer <ArrowRight className="size-3.5" />
-                    </Button>
-                  </div>
-                )}
+                {(() => {
+                  const next = outcome === "passed" ? nextStageAfter(iv) : null;
+                  if (!next || next === applicationStatus) return null;
+                  return (
+                    <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm dark:bg-emerald-950/50">
+                      <span className="text-emerald-700 dark:text-emerald-300">
+                        Passed — move this application to {STATUS_LABELS[next]}?
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => moveTo(next)}
+                        disabled={isPending}
+                        className="shrink-0"
+                      >
+                        Move to {STATUS_LABELS[next]} <ArrowRight className="size-3.5" />
+                      </Button>
+                    </div>
+                  );
+                })()}
               </li>
             );
           })}
@@ -222,6 +232,7 @@ export function InterviewSection({
             key={editing?.id ?? "new"}
             applicationId={applicationId}
             interview={editing}
+            nextRound={highestRound + 1}
             onDone={() => setDialogOpen(false)}
           />
         </DialogContent>

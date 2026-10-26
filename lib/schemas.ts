@@ -71,6 +71,8 @@ export type TaskFormValues = z.input<typeof taskSchema>;
 export const interviewSchema = z.object({
   application_id: z.string().uuid().or(z.string().min(1)),
   type: z.enum(INTERVIEW_TYPES).or(z.literal("")).optional(),
+  // Kept as text for the select; converted to a number when saved.
+  round: z.string().regex(/^[1-9]$/).or(z.literal("")).optional(),
   scheduled_at: z.string().optional(),
   location: z.string().trim().optional(),
   notes: z.string().trim().optional(),

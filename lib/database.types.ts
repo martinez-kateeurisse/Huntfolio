@@ -125,6 +125,7 @@ export interface Database {
           user_id: string;
           application_id: string;
           type: string | null;
+          round: number | null;
           scheduled_at: Timestamp | null;
           location: string | null;
           notes: string | null;
@@ -136,6 +137,7 @@ export interface Database {
           user_id: string;
           application_id: string;
           type?: string | null;
+          round?: number | null;
           scheduled_at?: Timestamp | null;
           location?: string | null;
           notes?: string | null;

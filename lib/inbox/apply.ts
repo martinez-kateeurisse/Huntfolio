@@ -43,8 +43,9 @@ const STAGE_RANK: Record<string, number> = {
   no_response: 1,
   screening: 2,
   interview: 3,
-  offer: 4,
-  closed: 5,
+  final_interview: 4,
+  offer: 5,
+  closed: 6,
 };
 
 // "Acme Corp., Inc." and "ACME" are the same employer.
@@ -105,7 +106,11 @@ async function applyEvent(
   ev: InboxEvent,
   apps: AppLite[],
 ): Promise<Outcome> {
-  const target = KIND_STATUS[ev.kind as EmailKind];
+  // A final-round invite goes straight to the Final interview column.
+  const target =
+    ev.kind === "interview" && ev.interview_type === "final"
+      ? "final_interview"
+      : KIND_STATUS[ev.kind as EmailKind];
   if (!target) {
     return { status: "skipped", applicationId: null, result: "Not something to track" };
   }
@@ -219,6 +224,7 @@ async function addInterview(
           user_id: userId,
           application_id: app.id,
           type: ev.interview_type ?? "other",
+          round: (existing?.length ?? 0) + 1,
           scheduled_at: when,
           notes: ev.subject ? `From email: "${ev.subject}"` : null,
         });
@@ -237,6 +243,7 @@ async function addInterview(
       user_id: userId,
       application_id: app.id,
       type: ev.interview_type ?? "other",
+      round: (existing?.length ?? 0) + 1,
       scheduled_at: null,
       notes: ev.subject ? `From email: "${ev.subject}"` : null,
     }),

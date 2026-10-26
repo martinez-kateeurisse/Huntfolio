@@ -9,10 +9,12 @@ import { toast } from "sonner";
 import { interviewSchema, type InterviewFormValues } from "@/lib/schemas";
 import { createInterview, updateInterview } from "@/lib/actions/interviews";
 import {
+  INTERVIEW_ROUNDS,
   INTERVIEW_TYPES,
   INTERVIEW_TYPE_LABELS,
   INTERVIEW_OUTCOMES,
   INTERVIEW_OUTCOME_LABELS,
+  interviewRoundLabel,
 } from "@/lib/constants";
 import type { Interview } from "@/lib/database.types";
 import { Button } from "@/components/ui/button";
@@ -37,10 +39,13 @@ function toLocalInput(iso: string | null | undefined): string {
 export function InterviewForm({
   applicationId,
   interview,
+  nextRound = 1,
   onDone,
 }: {
   applicationId: string;
   interview?: Interview | null;
+  // Suggested round for a new interview (one past the application's latest).
+  nextRound?: number;
   onDone?: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -51,6 +56,11 @@ export function InterviewForm({
     defaultValues: {
       application_id: applicationId,
       type: (interview?.type ?? "") as InterviewFormValues["type"],
+      round: interview
+        ? interview.round
+          ? String(interview.round)
+          : ""
+        : String(Math.min(nextRound, INTERVIEW_ROUNDS.length)),
       scheduled_at: toLocalInput(interview?.scheduled_at),
       location: interview?.location ?? "",
       notes: interview?.notes ?? "",
@@ -85,6 +95,31 @@ export function InterviewForm({
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">Round</Label>
+          <Controller
+            control={control}
+            name="round"
+            render={({ field }) => (
+              <Select
+                value={field.value ? String(field.value) : NONE}
+                onValueChange={(v) => field.onChange(v === NONE ? "" : v)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Round" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Unspecified</SelectItem>
+                  {INTERVIEW_ROUNDS.map((r) => (
+                    <SelectItem key={r} value={String(r)}>
+                      {interviewRoundLabel(r)} interview
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
           <Label className="text-xs text-muted-foreground">Type</Label>
           <Controller
             control={control}
@@ -108,6 +143,10 @@ export function InterviewForm({
               </Select>
             )}
           />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">Date &amp; time</Label>
+          <Input type="datetime-local" {...register("scheduled_at")} />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs text-muted-foreground">Outcome</Label>
@@ -134,11 +173,7 @@ export function InterviewForm({
           />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Date &amp; time</Label>
-          <Input type="datetime-local" {...register("scheduled_at")} />
-        </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
           <Label className="text-xs text-muted-foreground">
             Location / link
           </Label>

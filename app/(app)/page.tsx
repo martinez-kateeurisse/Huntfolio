@@ -15,7 +15,7 @@ import {
   getReminders,
   getTasks,
 } from "@/lib/queries";
-import { INTERVIEW_TYPE_LABELS, type InterviewType } from "@/lib/constants";
+import { interviewTitle } from "@/lib/constants";
 import { PageHeader } from "@/components/page-header";
 import { StatStrip } from "@/components/dashboard/stat-strip";
 import { NeedsAttentionPanel } from "@/components/reminders/needs-attention-panel";
@@ -174,9 +174,7 @@ export default async function TodayPage() {
               <ul className="flex flex-col gap-1">
                 {interviews.map((e) => {
                   const date = new Date(e.date);
-                  const type = e.interview?.type
-                    ? INTERVIEW_TYPE_LABELS[e.interview.type as InterviewType]
-                    : "Interview";
+                  const type = e.interview ? interviewTitle(e.interview) : "Interview";
                   return (
                     <li key={e.id}>
                       <Link

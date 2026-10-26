@@ -5,19 +5,20 @@
 
 import { TRACKS, TRACK_LABELS, SOURCES, type Track } from "@/lib/constants";
 
-// Funnel stage order. `closed` is terminal, not a funnel level.
+// Funnel stage order. `closed` and `no_response` are terminal, not levels.
 export const STAGE_ORDER = [
   "saved",
   "applied",
   "screening",
   "interview",
+  "final_interview",
   "offer",
 ] as const;
 export type Stage = (typeof STAGE_ORDER)[number];
 
 export function stageIndex(status: string): number {
   const i = STAGE_ORDER.indexOf(status as Stage);
-  return i; // -1 for 'closed' or unknown
+  return i; // -1 for 'closed', 'no_response' or unknown
 }
 
 // The funnel levels we report (Applied and beyond).
@@ -25,6 +26,7 @@ export const FUNNEL_STAGES: Stage[] = [
   "applied",
   "screening",
   "interview",
+  "final_interview",
   "offer",
 ];
 
@@ -33,6 +35,7 @@ export const STAGE_LABELS: Record<Stage, string> = {
   applied: "Applied",
   screening: "Screening",
   interview: "Interview",
+  final_interview: "Final interview",
   offer: "Offer",
 };
 
@@ -259,6 +262,7 @@ function countFunnel(
     applied: 0,
     screening: 0,
     interview: 0,
+    final_interview: 0,
     offer: 0,
   };
   for (const a of apps) {

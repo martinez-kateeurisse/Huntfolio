@@ -50,6 +50,7 @@ import { applyInboxEvents } from "@/lib/inbox/apply";
 export type ApplicationWithSignals = Application & {
   nextTaskDue: string | null;
   nextInterviewAt: string | null;
+  nextInterviewRound: number | null;
   viewedAt: string | null; // latest "employer viewed your application" email
 };
 
@@ -246,9 +247,11 @@ export async function getApplicationsWithSignals(): Promise<
       .not("due_date", "is", null)
       .not("application_id", "is", null)
       .order("due_date", { ascending: true }),
+    // "*" rather than a column list, so the board still loads if the
+    // interview-rounds migration hasn't been run yet.
     supabase
       .from("interviews")
-      .select("application_id, scheduled_at")
+      .select("*")
       .gte("scheduled_at", new Date().toISOString())
       .order("scheduled_at", { ascending: true }),
   ]);
@@ -263,14 +266,17 @@ export async function getApplicationsWithSignals(): Promise<
       nextTask.set(t.application_id, t.due_date);
     }
   }
-  const nextInterview = new Map<string, string>();
+  const nextInterview = new Map<string, { at: string; round: number | null }>();
   for (const iv of interviews ?? []) {
     if (
       iv.application_id &&
       iv.scheduled_at &&
       !nextInterview.has(iv.application_id)
     ) {
-      nextInterview.set(iv.application_id, iv.scheduled_at);
+      nextInterview.set(iv.application_id, {
+        at: iv.scheduled_at,
+        round: iv.round ?? null,
+      });
     }
   }
 
@@ -285,7 +291,8 @@ export async function getApplicationsWithSignals(): Promise<
   return (apps ?? []).map((a) => ({
     ...a,
     nextTaskDue: nextTask.get(a.id) ?? null,
-    nextInterviewAt: nextInterview.get(a.id) ?? null,
+    nextInterviewAt: nextInterview.get(a.id)?.at ?? null,
+    nextInterviewRound: nextInterview.get(a.id)?.round ?? null,
     viewedAt: lastViewed.get(a.id) ?? null,
   }));
 }

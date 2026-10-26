@@ -107,6 +107,8 @@ function chainFor(status: Status): Status[] {
       return ["saved", "applied", "screening"];
     case "interview":
       return ["saved", "applied", "screening", "interview"];
+    case "final_interview":
+      return ["saved", "applied", "screening", "interview", "final_interview"];
     case "offer":
       return ["saved", "applied", "screening", "interview", "offer"];
     case "no_response":
@@ -288,7 +290,8 @@ function seed(): DemoState {
     {
       id: "demo-iv1",
       user_id: DEMO_USER,
-      application_id: "demo-a6", // Kroll — upcoming technical
+      application_id: "demo-a6", // Kroll — upcoming technical (its 2nd round)
+      round: 2,
       type: "technical",
       scheduled_at: daysFromNow(3),
       location: "https://meet.google.com/demo-kroll",
@@ -300,6 +303,7 @@ function seed(): DemoState {
       id: "demo-iv2",
       user_id: DEMO_USER,
       application_id: "demo-a5", // PayMongo — phone screen soon
+      round: 1,
       type: "phone",
       scheduled_at: daysFromNow(1),
       location: "Recruiter will call",
@@ -311,6 +315,7 @@ function seed(): DemoState {
       id: "demo-iv3",
       user_id: DEMO_USER,
       application_id: "demo-a7", // Globe — final, passed
+      round: 1,
       type: "final",
       scheduled_at: daysAgo(6),
       location: "BGC office, 12F",
@@ -498,13 +503,13 @@ export function demoGetApplicationsWithSignals(): ApplicationWithSignals[] {
   }
 
   const nowIso = iso(now());
-  const nextInterview = new Map<string, string>();
+  const nextInterview = new Map<string, { at: string; round: number | null }>();
   const upcoming = s.interviews
     .filter((iv) => iv.scheduled_at && iv.scheduled_at >= nowIso)
     .sort((a, b) => (a.scheduled_at! < b.scheduled_at! ? -1 : 1));
   for (const iv of upcoming) {
     if (!nextInterview.has(iv.application_id))
-      nextInterview.set(iv.application_id, iv.scheduled_at!);
+      nextInterview.set(iv.application_id, { at: iv.scheduled_at!, round: iv.round ?? null });
   }
 
   return [...s.applications]
@@ -512,7 +517,8 @@ export function demoGetApplicationsWithSignals(): ApplicationWithSignals[] {
     .map((a) => ({
       ...a,
       nextTaskDue: nextTask.get(a.id) ?? null,
-      nextInterviewAt: nextInterview.get(a.id) ?? null,
+      nextInterviewAt: nextInterview.get(a.id)?.at ?? null,
+      nextInterviewRound: nextInterview.get(a.id)?.round ?? null,
       viewedAt: null,
     }));
 }
@@ -859,6 +865,7 @@ export function demoCreateInterview(values: InterviewFormValues): { id: string }
     user_id: DEMO_USER,
     application_id: values.application_id!,
     type: values.type || null,
+    round: values.round ? Number(values.round) : null,
     scheduled_at: values.scheduled_at || null,
     location: values.location || null,
     notes: values.notes || null,
@@ -872,6 +879,7 @@ export function demoUpdateInterview(id: string, values: InterviewFormValues) {
   const iv = store().interviews.find((x) => x.id === id);
   if (!iv) return;
   iv.type = values.type || null;
+  iv.round = values.round ? Number(values.round) : null;
   iv.scheduled_at = values.scheduled_at || null;
   iv.location = values.location || null;
   iv.notes = values.notes || null;

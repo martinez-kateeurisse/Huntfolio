@@ -24,6 +24,7 @@ export const STATUSES = [
   "applied",
   "screening",
   "interview",
+  "final_interview",
   "offer",
   "no_response",
   "closed",
@@ -35,6 +36,7 @@ export const STATUS_LABELS: Record<Status, string> = {
   applied: "Applied",
   screening: "Screening",
   interview: "Interview",
+  final_interview: "Final interview",
   offer: "Offer",
   no_response: "No response",
   closed: "Closed",
@@ -49,6 +51,7 @@ export const APPLIED_OR_BEYOND: Status[] = [
   "applied",
   "screening",
   "interview",
+  "final_interview",
   "offer",
   "no_response",
   "closed",
@@ -56,6 +59,7 @@ export const APPLIED_OR_BEYOND: Status[] = [
 export const RESPONDED_STATUSES: Status[] = [
   "screening",
   "interview",
+  "final_interview",
   "offer",
 ];
 
@@ -121,6 +125,25 @@ export const INTERVIEW_TYPE_LABELS: Record<InterviewType, string> = {
   final: "Final",
   other: "Other",
 };
+
+// Rounds sit under the board's Interview column; Final interview has its own.
+export const INTERVIEW_ROUNDS = [1, 2, 3, 4, 5, 6] as const;
+
+export function interviewRoundLabel(round: number): string {
+  if (round <= 1) return "Initial";
+  if (round === 2) return "2nd";
+  if (round === 3) return "3rd";
+  return `${round}th`;
+}
+
+// "2nd interview · Technical", "Initial interview", "Interview · HR".
+export function interviewTitle(iv: { round?: number | null; type?: string | null }): string {
+  const base = iv.round ? `${interviewRoundLabel(iv.round)} interview` : "Interview";
+  const type = iv.type && iv.type in INTERVIEW_TYPE_LABELS
+    ? INTERVIEW_TYPE_LABELS[iv.type as InterviewType]
+    : null;
+  return type ? `${base} · ${type}` : base;
+}
 
 export const INTERVIEW_OUTCOMES = ["pending", "passed", "failed"] as const;
 export type InterviewOutcome = (typeof INTERVIEW_OUTCOMES)[number];
