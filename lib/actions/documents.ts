@@ -26,6 +26,8 @@ async function requireUser() {
   return { supabase, userId: user.id };
 }
 
+const GONE = "This document was deleted. Refresh the page.";
+
 export async function createDocument(
   values: DocumentFormValues,
   id?: string,
@@ -84,8 +86,9 @@ export async function setDefaultDocument(id: string): Promise<ActionResult> {
     .from("documents")
     .select("type")
     .eq("id", id)
-    .single();
+    .maybeSingle();
   if (readErr) return { ok: false, error: readErr.message };
+  if (!doc) return { ok: false, error: GONE };
 
   await supabase
     .from("documents")
@@ -115,8 +118,13 @@ export async function deleteDocument(id: string): Promise<ActionResult> {
     .from("documents")
     .select("file_url")
     .eq("id", id)
-    .single();
+    .maybeSingle();
   if (readErr) return { ok: false, error: readErr.message };
+  // Already deleted (a second click, another tab): nothing left to do.
+  if (!doc) {
+    revalidatePath("/documents");
+    return { ok: true };
+  }
 
   // Remove the storage object first; don't orphan the file if the row goes.
   if (doc.file_url) {
@@ -148,8 +156,9 @@ export async function getDocumentDownloadUrl(
     .from("documents")
     .select("file_url")
     .eq("id", id)
-    .single();
+    .maybeSingle();
   if (error) return { ok: false, error: error.message };
+  if (!doc) return { ok: false, error: GONE };
   if (!doc.file_url) return { ok: false, error: "No file on record." };
 
   const { url, error: urlErr } = await createSignedDownloadUrl(doc.file_url);
@@ -174,8 +183,9 @@ export async function getDocumentPreviewUrl(
     .from("documents")
     .select("file_url")
     .eq("id", id)
-    .single();
+    .maybeSingle();
   if (error) return { ok: false, error: error.message };
+  if (!doc) return { ok: false, error: GONE };
   if (!doc.file_url) return { ok: false, error: "No file on record." };
 
   // Inline (download=false) and a slightly longer TTL so the viewer stays open.

@@ -167,8 +167,11 @@ export async function updateApplicationStatus(
     .from("applications")
     .select("status, date_applied")
     .eq("id", id)
-    .single();
+    .maybeSingle();
   if (readErr) return { ok: false, error: readErr.message };
+  if (!current) {
+    return { ok: false, error: "This application was deleted. Refresh the page." };
+  }
 
   const patch: ApplicationUpdate = { status };
 

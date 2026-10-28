@@ -79,10 +79,11 @@ export async function toggleTask(
     .update({ status: done ? "done" : "todo" })
     .eq("id", id)
     .select("application_id")
-    .single();
+    .maybeSingle();
 
   if (error) return { ok: false, error: error.message };
-  revalidateTasks(data?.application_id);
+  if (!data) return { ok: false, error: "This task was deleted. Refresh the page." };
+  revalidateTasks(data.application_id);
   return { ok: true };
 }
 
@@ -93,14 +94,15 @@ export async function deleteTask(id: string): Promise<ActionResult> {
     return { ok: true };
   }
   const { supabase } = await requireUser();
+  // No .single(): if it's already gone (a second click, another tab), the
+  // delete matched nothing — that's still success, not an error.
   const { data, error } = await supabase
     .from("tasks")
     .delete()
     .eq("id", id)
-    .select("application_id")
-    .single();
+    .select("application_id");
 
   if (error) return { ok: false, error: error.message };
-  revalidateTasks(data?.application_id);
+  revalidateTasks(data?.[0]?.application_id);
   return { ok: true };
 }

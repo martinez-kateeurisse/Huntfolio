@@ -22,6 +22,9 @@ export function TaskItem({
   showApplication?: boolean;
 }) {
   const [done, setDone] = useState(task.status === "done");
+  // Hidden as soon as delete is clicked, so it can't be deleted twice while
+  // the page refreshes; it comes back only if the delete fails.
+  const [removed, setRemoved] = useState(false);
   const [, startTransition] = useTransition();
   const due = dueLabel(task.due_date);
 
@@ -37,11 +40,18 @@ export function TaskItem({
   }
 
   function onDelete() {
+    if (removed) return;
+    setRemoved(true);
     startTransition(async () => {
       const result = await deleteTask(task.id);
-      if (!result.ok) toast.error(result.error);
+      if (!result.ok) {
+        setRemoved(false);
+        toast.error(result.error);
+      }
     });
   }
+
+  if (removed) return null;
 
   return (
     <div className="group flex items-start gap-3 rounded-lg border bg-card px-3 py-2.5">
